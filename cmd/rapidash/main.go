@@ -43,8 +43,7 @@ func (lc *LogCommand) Execute(args []string) error {
 		return xerrors.Errorf("failed to get stat for stdin: %w", err)
 	}
 	if stat.Size() == 0 {
-		log.Println("'rapidash log' command requires stdin characters but that size is zero")
-		return nil
+		return xerrors.New("'rapidash log' command requires stdin characters but that size is zero")
 	}
 
 	rapidashLogs := []*RapidashLog{}
@@ -113,11 +112,25 @@ func (lc *LogCommand) readFile(fs http.FileSystem, fileName string) ([]byte, err
 	return data, nil
 }
 
+func parseErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	if e, ok := err.(*flags.Error); ok {
+		return e
+	}
+	if e, ok := xerrors.Unwrap(err).(*flags.Error); ok {
+		return e
+	}
+	return err
+}
+
 //go:generate statik -src ../../static/dist -p statik -dest ../../static -f -c '' -m
 func main() {
 	parser := flags.NewParser(&opts, flags.Default)
-	if _, err := parser.Parse(); err != nil {
-		log.Println(xerrors.Errorf("failed to parse flgas: %w", err))
-		os.Exit(1)
+	_, err := parser.Parse()
+	if flags.WroteHelp(parseErr(err)) {
+		return
 	}
+	parser.WriteHelp(os.Stdout)
 }
