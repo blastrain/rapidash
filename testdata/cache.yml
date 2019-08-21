@@ -1,0 +1,43 @@
+rule:
+  logger:
+    mode: console
+    enabled: true
+  retry:
+    limit: 3
+    interval: 30000
+  cache_control:
+    optimistic_lock: true
+    pessimistic_lock: true
+    ignore_newer_cache: true
+  timeout: 200000000000
+  max_idle_connection: 1000
+slc:
+  servers:
+    - localhost:11211
+  tables:
+    user_logins:
+      shard_key: user_id
+      cache_control:
+        optimistic_lock: false
+        pessimistic_lock: false
+    user_items:
+      server: localhost:11211
+      lock_expiration: 30
+      expiration: 100
+  lock_expiration: 90
+  expiration: 0
+llc:
+  servers:
+    - localhost:11211
+  tags:
+    a:
+      server: localhost:11211
+    b:
+      server: localhost:11211
+      lock_expiration: 90
+      expiration: 0
+  cache_control:
+    optimistic_lock: false
+    pessimistic_lock: false
+  lock_expiration: 90
+  expiration: 3600
