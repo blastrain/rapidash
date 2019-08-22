@@ -2452,7 +2452,8 @@ func NewBytesValue(v []byte) *Value {
 				float32, float64, bool:
 				rvalue.bytesValue = []byte(fmt.Sprint(v))
 			case []byte:
-				rvalue.bytesValue = v
+				rvalue.bytesValue = make([]byte, len(v))
+				copy(rvalue.bytesValue, v)
 			case string:
 				rvalue.bytesValue = []byte(v)
 			}
