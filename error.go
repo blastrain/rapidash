@@ -57,15 +57,9 @@ func IsCacheMiss(err error) bool {
 }
 
 func IsTimeout(err error) bool {
-	if xerrors.Is(err, server.ErrSetTimeout) {
-		return true
-	}
-	return false
+	return xerrors.Is(err, server.ErrSetTimeout)
 }
 
 func IsMaxIdleConnections(err error) bool {
-	if xerrors.Is(err, server.ErrSetMaxIdleConnections) {
-		return true
-	}
-	return false
+	return xerrors.Is(err, server.ErrSetMaxIdleConnections)
 }
