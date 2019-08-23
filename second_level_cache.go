@@ -248,7 +248,7 @@ func (c *SecondLevelCache) lockKey(tx *Tx, key server.CacheKey) error {
 	log.Add(tx.id, lockKey, value)
 	if err := c.cacheServer.Add(lockKey, bytes, c.opt.LockExpiration()); err != nil {
 		content, getErr := c.cacheServer.Get(lockKey)
-		if xerrors.Is(getErr, server.ErrCacheMiss) {
+		if IsCacheMiss(getErr) {
 			return xerrors.Errorf("fatal error. cannot add transaction key. but transaction key doesn't exist: %w", err)
 		}
 		if getErr != nil {
