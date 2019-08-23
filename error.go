@@ -1,6 +1,9 @@
 package rapidash
 
-import "golang.org/x/xerrors"
+import (
+	"go.knocknote.io/rapidash/server"
+	"golang.org/x/xerrors"
+)
 
 var (
 	ErrBeginTransaction            = xerrors.New("failed begin cache transaction. required single connection instance or nothing")
@@ -42,3 +45,27 @@ var (
 var (
 	ErrInvalidCacheKey = xerrors.New("invalid cache key")
 )
+
+func IsCacheMiss(err error) bool {
+	if xerrors.Is(err, ErrCacheMiss) {
+		return true
+	}
+	if xerrors.Is(err, server.ErrCacheMiss) {
+		return true
+	}
+	return false
+}
+
+func IsTimeout(err error) bool {
+	if xerrors.Is(err, server.ErrSetTimeout) {
+		return true
+	}
+	return false
+}
+
+func IsMaxIdleConnections(err error) bool {
+	if xerrors.Is(err, server.ErrSetMaxIdleConnections) {
+		return true
+	}
+	return false
+}
