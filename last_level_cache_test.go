@@ -1068,6 +1068,16 @@ func TestLLCTimeSlice(t *testing.T) {
 	}
 }
 
+func TestCacheMiss(t *testing.T) {
+	tx, err := cache.Begin()
+	NoError(t, err)
+	defer func() { NoError(t, tx.Rollback()) }()
+	var v int
+	if err := tx.Find("int", IntPtr(&v)); !IsCacheMiss(err) {
+		t.Fatalf("%+v", err)
+	}
+}
+
 func TestLLCDecodeError(t *testing.T) {
 	now := time.Now()
 	tx, err := cache.Begin()

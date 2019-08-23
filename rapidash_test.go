@@ -127,8 +127,14 @@ func TestSetTimeout(t *testing.T) {
 		t.Run(fmt.Sprintf("TestSetTimeout:%v\n", i), func(t *testing.T) {
 			_, err := New(Timeout(tt.timeout))
 			if tt.expected == nil {
+				if IsTimeout(err) {
+					t.Fatal("unexpected condition")
+				}
 				NoError(t, err)
 			} else if !xerrors.Is(err, tt.expected) {
+				if !IsTimeout(err) {
+					t.Fatal("unexpected condition")
+				}
 				t.Fatalf("%+v", err)
 			}
 		})
@@ -154,8 +160,14 @@ func TestSetMaxIdleConnections(t *testing.T) {
 		t.Run(fmt.Sprintf("TestSetMaxIdleConnections:%v\n", i), func(t *testing.T) {
 			_, err := New(MaxIdleConnections(tt.maxIdle))
 			if tt.expected == nil {
+				if IsMaxIdleConnections(err) {
+					t.Fatal("unexpected condition")
+				}
 				NoError(t, err)
 			} else if !xerrors.Is(err, tt.expected) {
+				if !IsMaxIdleConnections(err) {
+					t.Fatal("unexpected condition")
+				}
 				t.Fatalf("%+v", err)
 			}
 		})

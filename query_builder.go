@@ -274,7 +274,7 @@ func (q *Queries) Len() int {
 func (q *Queries) Each(iter func(*Query) error) error {
 	for _, query := range q.queries {
 		if err := iter(query); err != nil {
-			if xerrors.Is(err, server.ErrCacheMiss) {
+			if IsCacheMiss(err) {
 				q.cacheMissQueries = append(q.cacheMissQueries, query)
 				continue
 			}
@@ -295,7 +295,7 @@ func (q *Queries) LoadValues(factory *ValueFactory, primaryKeyLoader func(IndexT
 	findPrimaryKeys := []server.CacheKey{}
 	for queryIter.Next() {
 		if err := queryIter.Error(); err != nil {
-			if xerrors.Is(err, server.ErrCacheMiss) {
+			if IsCacheMiss(err) {
 				q.cacheMissQueries = append(q.cacheMissQueries, queryIter.Query())
 				continue
 			}
@@ -314,7 +314,7 @@ func (q *Queries) LoadValues(factory *ValueFactory, primaryKeyLoader func(IndexT
 
 	for valueIter.Next() {
 		if err := valueIter.Error(); err != nil {
-			if xerrors.Is(err, server.ErrCacheMiss) {
+			if IsCacheMiss(err) {
 				if existsFirstPhaseCacheMissQuery {
 					query := queryIter.QueryByPrimaryKey(valueIter.PrimaryKey())
 					if _, exists := alreadyAddedCacheMissQueryMap[query]; !exists {
