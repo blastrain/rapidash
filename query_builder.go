@@ -112,7 +112,6 @@ func (i *QueryIterator) SetPrimaryKeyWithKey(key, primaryKey server.CacheKey) {
 	if primaryKey.String() != "" {
 		result.primaryKeys = []server.CacheKey{primaryKey}
 	}
-	result.primaryKeys = []server.CacheKey{primaryKey}
 	i.primaryKeyToQueryMap[primaryKey] = result.query
 }
 
