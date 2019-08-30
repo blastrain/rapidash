@@ -334,8 +334,14 @@ func TestTx_CreateByTableContext(t *testing.T) {
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
+		if tx.IsCommitted() {
+			t.Fatal("unexpected transaction status")
+		}
 		NoError(t, tx.Commit())
 
+		if !tx.IsCommitted() {
+			t.Fatal("unexpected transaction status")
+		}
 		userLogin := defaultUserLogin()
 		if _, err := tx.CreateByTableContext(context.Background(), "user_logins", userLogin); err != nil {
 			if !xerrors.Is(err, ErrAlreadyCommittedTransaction) {
