@@ -492,6 +492,10 @@ func (tx *Tx) DeleteByQueryBuilderContext(ctx context.Context, builder *QueryBui
 	return xerrors.Errorf("unknown table name %s", builder.tableName)
 }
 
+func (tx *Tx) IsCommitted() bool {
+	return tx.isCommitted
+}
+
 func (tx *Tx) execQuery(queries []*PendingQuery) []*PendingQuery {
 	failedQueries := []*PendingQuery{}
 	for _, query := range queries {
