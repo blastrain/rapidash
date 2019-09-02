@@ -644,6 +644,7 @@ func (b *QueryBuilder) Build(factory *ValueFactory) {
 }
 
 func (b *QueryBuilder) buildINQueryWithIndex(indexes map[string]*Index) (*Queries, error) {
+	b.inCondition.removeDuplidateConditionValue()
 	queryNum := len(b.inCondition.values)
 	columnNum := len(b.conditions.conditions)
 	queries := NewQueries(b.tableName, b.primaryIndexFromIndexes(indexes), queryNum)
@@ -1219,6 +1220,7 @@ func (c *INCondition) Compare(value *Value) bool {
 }
 
 func (c *INCondition) Search(tree *BTree) []Leaf {
+	c.removeDuplidateConditionValue()
 	leafs := []Leaf{}
 	for _, v := range c.values {
 		value := tree.searchEq(v)
@@ -1246,3 +1248,303 @@ func (c *INCondition) Release() {
 	}
 	c.values = nil
 }
+
+func (c *INCondition) removeDuplidateConditionValue() {
+	var removedDuplidateCondition []*Value
+	for i, srcValue := range c.values {
+		isDuplicate := false
+		for _, value := range c.values[i+1:] {
+			if srcValue.typ == value.typ {
+				switch srcValue.typ {
+				case IntType:
+					if srcValue.intValue == value.intValue {
+						isDuplicate = true
+						break
+					}
+				case Int8Type:
+					if srcValue.int8Value == value.int8Value {
+						isDuplicate = true
+						break
+					}
+				case Int16Type:
+					if srcValue.int16Value == value.int16Value {
+						isDuplicate = true
+						break
+					}
+				case Int32Type:
+					if srcValue.int32Value == value.int32Value {
+						isDuplicate = true
+						break
+					}
+				case Int64Type:
+					if srcValue.int64Value == value.int64Value {
+						isDuplicate = true
+						break
+					}
+				case UintType:
+					if srcValue.uintValue == value.uintValue {
+						isDuplicate = true
+						break
+					}
+				case Uint8Type:
+					if srcValue.uint8Value == value.uint8Value {
+						isDuplicate = true
+						break
+					}
+				case Uint16Type:
+					if srcValue.uint16Value == value.uint16Value {
+						isDuplicate = true
+						break
+					}
+				case Uint32Type:
+					if srcValue.uint32Value == value.uint32Value {
+						isDuplicate = true
+						break
+					}
+				case Uint64Type:
+					if srcValue.uint64Value == value.uint64Value {
+						isDuplicate = true
+						break
+					}
+				case Float32Type:
+					if srcValue.float32Value == value.float32Value {
+						isDuplicate = true
+						break
+					}
+				case Float64Type:
+					if srcValue.float64Value == value.float64Value {
+						isDuplicate = true
+						break
+					}
+				case BoolType:
+					if srcValue.boolValue == value.boolValue {
+						isDuplicate = true
+						break
+					}
+				case StringType:
+					if srcValue.stringValue == value.stringValue {
+						isDuplicate = true
+						break
+					}
+				case BytesType:
+					isEqual := false
+					if len(srcValue.bytesValue) == len(value.bytesValue) {
+						for i, byte := range srcValue.bytesValue {
+							if byte != value.bytesValue[i] {
+								break
+							}
+						}
+						isEqual = true
+					}
+					if isEqual {
+						isDuplicate = true
+						break
+					}
+				case TimeType:
+					if srcValue.timeValue == value.timeValue {
+						isDuplicate = true
+						break
+					}
+				case SliceType:
+					if len(srcValue.sliceValue) == len(value.sliceValue) {
+						equal := true
+						for i, value := range srcValue.sliceValue {
+							if !equalValue(value, srcValue.sliceValue[i]) {
+								equal = false
+								break
+							}
+						}
+						if equal {
+							isDuplicate = true
+							break
+						}
+					}
+				case StructType:
+					if equalStructValue(srcValue.structValue, value.structValue) {
+						isDuplicate = true
+						break
+					}
+				}
+			}
+		}
+		if !isDuplicate {
+			removedDuplidateCondition = append(removedDuplidateCondition, srcValue)
+		}
+	}
+	c.values = removedDuplidateCondition
+}
+
+func equalValue(src *Value, dest *Value) bool {
+	res := false
+	switch src.typ {
+	case IntType:
+		if src.intValue == dest.intValue {
+			res = true
+		}
+	case Int8Type:
+		if src.int8Value == dest.int8Value {
+			res = true
+		}
+	case Int16Type:
+		if src.int16Value == dest.int16Value {
+			res = true
+		}
+	case Int32Type:
+		if src.int32Value == dest.int32Value {
+			res = true
+		}
+	case Int64Type:
+		if src.int64Value == dest.int64Value {
+			res = true
+		}
+	case UintType:
+		if src.uintValue == dest.uintValue {
+			res = true
+		}
+	case Uint8Type:
+		if src.uint8Value == dest.uint8Value {
+			res = true
+		}
+	case Uint16Type:
+		if src.uint16Value == dest.uint16Value {
+			res = true
+		}
+	case Uint32Type:
+		if src.uint32Value == dest.uint32Value {
+			res = true
+		}
+	case Uint64Type:
+		if src.uint64Value == dest.uint64Value {
+			res = true
+		}
+	case Float32Type:
+		if src.float32Value == dest.float32Value {
+			res = true
+		}
+	case Float64Type:
+		if src.float64Value == dest.float64Value {
+			res = true
+		}
+	case BoolType:
+		if src.boolValue == dest.boolValue {
+			res = true
+		}
+	case StringType:
+		if src.stringValue == dest.stringValue {
+			res = true
+		}
+	case BytesType:
+		if len(src.bytesValue) == len(dest.bytesValue) {
+			equal := true
+			for i, byte := range src.bytesValue {
+				if byte != dest.bytesValue[i] {
+					equal = false
+					break
+				}
+			}
+			if equal {
+				res = true
+			}
+		}
+	case TimeType:
+		if src.timeValue == dest.timeValue {
+			res = true
+		}
+	case SliceType:
+		if len(src.sliceValue) == len(dest.sliceValue) {
+			equal := true
+			for i, value := range src.sliceValue {
+				if !equalValue(value, dest.sliceValue[i]) {
+					equal = false
+					break
+				}
+			}
+			if equal {
+				res = true
+			}
+		}
+	case StructType:
+		if equalStruct(src.structValue.typ, dest.structValue.typ) {
+			if len(src.structValue.fields) == len(dest.structValue.fields) {
+				equal := true
+				for key, value := range src.structValue.fields {
+					if !equalValue(value, dest.structValue.fields[key]) {
+						equal = false
+						break
+					}
+				}
+				if equal {
+					res = true
+				}
+			}
+		}
+	}
+	return res
+}
+
+func equalStructValue(src *StructValue, dest *StructValue) bool {
+	res := false
+	if equalStruct(src.typ, dest.typ) {
+		if len(src.fields) == len(dest.fields) {
+			equal := true
+			for key, srcValue := range src.fields {
+				if destValue, ok := dest.fields[key]; ok {
+					if !equalValue(srcValue, destValue) {
+						equal = false
+						break
+					}
+				}
+			}
+			if equal {
+				if src.decodeErr == dest.decodeErr {
+					res = true
+				}
+			}
+		}
+	}
+	return res
+}
+
+func equalStruct(src *Struct, dest *Struct) bool {
+	res := false
+	if src.tableName == dest.tableName {
+		if len(src.fields) == len(dest.fields) {
+			equal := true
+			for key, srcStructField := range src.fields {
+				if destStructField, ok := dest.fields[key]; ok {
+					if srcStructField.typ != destStructField.typ {
+						equal = false
+						break
+					}
+					if srcStructField.kind != destStructField.kind {
+						equal = false
+						break
+					}
+					if srcStructField.column != destStructField.column {
+						equal = false
+						break
+					}
+					if srcStructField.index != destStructField.index {
+						equal = false
+						break
+					}
+					if srcStructField.subtype != destStructField.subtype {
+						equal = false
+						break
+					}
+					if !equalStruct(srcStructField.subtypeStruct, destStructField.subtypeStruct) {
+						equal = false
+						break
+					}
+				} else {
+					equal = false
+				}
+			}
+			if equal {
+				res = true
+			}
+		}
+	}
+	return res
+}
+
