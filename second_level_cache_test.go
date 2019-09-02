@@ -664,8 +664,17 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 				if len(userLogins) != 5 {
 					t.Fatal("cannot work FindByQueryBuilder")
 				}
+				t.Run("duplicated values", func(t *testing.T) {
+					builder := NewQueryBuilder("user_logins").
+						In("user_id", []uint64{1, 2, 3, 4, 5, 1, 2, 3, 4, 5}).
+						Eq("login_param_id", uint64(1))
+					var userLogins UserLogins
+					NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &userLogins))
+					if len(userLogins) != 5 {
+						t.Fatal("cannot work FindByQueryBuilder")
+					}
+				})
 			})
-
 			t.Run("from server", func(t *testing.T) {
 				var userLogins UserLogins
 				NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &userLogins))

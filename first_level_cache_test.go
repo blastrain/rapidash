@@ -98,12 +98,22 @@ func TestPK(t *testing.T) {
 func TestINQuery(t *testing.T) {
 	flc := NewFirstLevelCache(eventType())
 	NoError(t, flc.WarmUp(conn))
-	builder := NewQueryBuilder("events").In("id", []uint64{1, 2, 3, 4, 5})
-	var events EventSlice
-	NoError(t, flc.FindByQueryBuilder(builder, &events))
-	if len(events) != 5 {
-		t.Fatalf("cannot find by where id in (1, 2, 3, 4, 5). len = %d", len(events))
-	}
+	t.Run("in query", func(t *testing.T) {
+		builder := NewQueryBuilder("events").In("id", []uint64{1, 2, 3, 4, 5})
+		var events EventSlice
+		NoError(t, flc.FindByQueryBuilder(builder, &events))
+		if len(events) != 5 {
+			t.Fatalf("cannot find by where id in (1, 2, 3, 4, 5). len = %d", len(events))
+		}
+	})
+	t.Run("in query by duplicated values", func(t *testing.T) {
+		builder := NewQueryBuilder("events").In("id", []uint64{1, 2, 3, 4, 5, 1, 2, 3, 4, 5})
+		var events EventSlice
+		NoError(t, flc.FindByQueryBuilder(builder, &events))
+		if len(events) != 5 {
+			t.Fatalf("cannot find by where id in (1, 2, 3, 4, 5, 1, 2, 3, 4, 5). len = %d", len(events))
+		}
+	})
 }
 
 func TestFindAll(t *testing.T) {
