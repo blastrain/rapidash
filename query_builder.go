@@ -1234,7 +1234,7 @@ func (c *INCondition) Build(factory *ValueFactory) {
 	if c.values != nil {
 		return
 	}
-	c.values = factory.CreateValues(c.rawValues)
+	c.values = factory.CreateUniqueValues(c.rawValues)
 }
 
 func (c *INCondition) Release() {
