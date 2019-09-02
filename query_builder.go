@@ -93,7 +93,7 @@ func (i *QueryIterator) Error() error {
 
 func (i *QueryIterator) SetPrimaryKey(primaryKey server.CacheKey) {
 	result := i.results[i.currentIndex]
-	if primaryKey.String() != "" {
+	if primaryKey != nil && primaryKey.String() != "" {
 		result.primaryKeys = []server.CacheKey{primaryKey}
 	}
 	i.primaryKeyToQueryMap[primaryKey] = result.query
@@ -109,7 +109,7 @@ func (i *QueryIterator) SetPrimaryKeys(primaryKeys []server.CacheKey) {
 
 func (i *QueryIterator) SetPrimaryKeyWithKey(key, primaryKey server.CacheKey) {
 	result := i.results[i.keyToIndexMap[key]]
-	if primaryKey.String() != "" {
+	if primaryKey != nil && primaryKey.String() != "" {
 		result.primaryKeys = []server.CacheKey{primaryKey}
 	}
 	i.primaryKeyToQueryMap[primaryKey] = result.query
