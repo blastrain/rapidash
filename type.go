@@ -2,6 +2,7 @@ package rapidash
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"hash/crc32"
 	"sort"
@@ -462,102 +463,167 @@ func (f *ValueFactory) CreateValue(v interface{}) *Value {
 	return nil
 }
 
-func (f *ValueFactory) CreateValues(v interface{}) []*Value {
+func (f *ValueFactory) CreateUniqueValues(v interface{}) []*Value {
 	switch slice := v.(type) {
 	case []int:
-		values := make([]*Value, len(slice))
-		for idx, v := range slice {
-			values[idx] = f.CreateIntValue(v)
+		uniqueMap := map[int]struct{}{}
+		for _, v := range slice {
+			uniqueMap[v] = struct{}{}
+		}
+		values := make([]*Value, 0, len(uniqueMap))
+		for v := range uniqueMap {
+			values = append(values, f.CreateIntValue(v))
 		}
 		return values
 	case []int8:
-		values := make([]*Value, len(slice))
-		for idx, v := range slice {
-			values[idx] = f.CreateInt8Value(v)
+		uniqueMap := map[int8]struct{}{}
+		for _, v := range slice {
+			uniqueMap[v] = struct{}{}
+		}
+		values := make([]*Value, 0, len(uniqueMap))
+		for v := range uniqueMap {
+			values = append(values, f.CreateInt8Value(v))
 		}
 		return values
 	case []int16:
-		values := make([]*Value, len(slice))
-		for idx, v := range slice {
-			values[idx] = f.CreateInt16Value(v)
+		uniqueMap := map[int16]struct{}{}
+		for _, v := range slice {
+			uniqueMap[v] = struct{}{}
+		}
+		values := make([]*Value, 0, len(uniqueMap))
+		for v := range uniqueMap {
+			values = append(values, f.CreateInt16Value(v))
 		}
 		return values
 	case []int32:
-		values := make([]*Value, len(slice))
-		for idx, v := range slice {
-			values[idx] = f.CreateInt32Value(v)
+		uniqueMap := map[int32]struct{}{}
+		for _, v := range slice {
+			uniqueMap[v] = struct{}{}
+		}
+		values := make([]*Value, 0, len(uniqueMap))
+		for v := range uniqueMap {
+			values = append(values, f.CreateInt32Value(v))
 		}
 		return values
 	case []int64:
-		values := make([]*Value, len(slice))
-		for idx, v := range slice {
-			values[idx] = f.CreateInt64Value(v)
+		uniqueMap := map[int64]struct{}{}
+		for _, v := range slice {
+			uniqueMap[v] = struct{}{}
+		}
+		values := make([]*Value, 0, len(uniqueMap))
+		for v := range uniqueMap {
+			values = append(values, f.CreateInt64Value(v))
 		}
 		return values
 	case []uint:
-		values := make([]*Value, len(slice))
-		for idx, v := range slice {
-			values[idx] = f.CreateUintValue(v)
+		uniqueMap := map[uint]struct{}{}
+		for _, v := range slice {
+			uniqueMap[v] = struct{}{}
+		}
+		values := make([]*Value, 0, len(uniqueMap))
+		for v := range uniqueMap {
+			values = append(values, f.CreateUintValue(v))
 		}
 		return values
 	case []uint8:
-		values := make([]*Value, len(slice))
-		for idx, v := range slice {
-			values[idx] = f.CreateUint8Value(v)
+		uniqueMap := map[uint8]struct{}{}
+		for _, v := range slice {
+			uniqueMap[v] = struct{}{}
+		}
+		values := make([]*Value, 0, len(uniqueMap))
+		for v := range uniqueMap {
+			values = append(values, f.CreateUint8Value(v))
 		}
 		return values
 	case []uint16:
-		values := make([]*Value, len(slice))
-		for idx, v := range slice {
-			values[idx] = f.CreateUint16Value(v)
+		uniqueMap := map[uint16]struct{}{}
+		for _, v := range slice {
+			uniqueMap[v] = struct{}{}
+		}
+		values := make([]*Value, 0, len(uniqueMap))
+		for v := range uniqueMap {
+			values = append(values, f.CreateUint16Value(v))
 		}
 		return values
 	case []uint32:
-		values := make([]*Value, len(slice))
-		for idx, v := range slice {
-			values[idx] = f.CreateUint32Value(v)
+		uniqueMap := map[uint32]struct{}{}
+		for _, v := range slice {
+			uniqueMap[v] = struct{}{}
+		}
+		values := make([]*Value, 0, len(uniqueMap))
+		for v := range uniqueMap {
+			values = append(values, f.CreateUint32Value(v))
 		}
 		return values
 	case []uint64:
-		values := make([]*Value, len(slice))
-		for idx, v := range slice {
-			values[idx] = f.CreateUint64Value(v)
+		uniqueMap := map[uint64]struct{}{}
+		for _, v := range slice {
+			uniqueMap[v] = struct{}{}
+		}
+		values := make([]*Value, 0, len(uniqueMap))
+		for v := range uniqueMap {
+			values = append(values, f.CreateUint64Value(v))
 		}
 		return values
 	case []float32:
-		values := make([]*Value, len(slice))
-		for idx, v := range slice {
-			values[idx] = f.CreateFloat32Value(v)
+		uniqueMap := map[float32]struct{}{}
+		for _, v := range slice {
+			uniqueMap[v] = struct{}{}
+		}
+		values := make([]*Value, 0, len(uniqueMap))
+		for v := range uniqueMap {
+			values = append(values, f.CreateFloat32Value(v))
 		}
 		return values
 	case []float64:
-		values := make([]*Value, len(slice))
-		for idx, v := range slice {
-			values[idx] = f.CreateFloat64Value(v)
+		uniqueMap := map[float64]struct{}{}
+		for _, v := range slice {
+			uniqueMap[v] = struct{}{}
+		}
+		values := make([]*Value, 0, len(uniqueMap))
+		for v := range uniqueMap {
+			values = append(values, f.CreateFloat64Value(v))
 		}
 		return values
 	case []bool:
-		values := make([]*Value, len(slice))
-		for idx, v := range slice {
-			values[idx] = f.CreateBoolValue(v)
+		uniqueMap := map[bool]struct{}{}
+		for _, v := range slice {
+			uniqueMap[v] = struct{}{}
+		}
+		values := make([]*Value, 0, len(uniqueMap))
+		for v := range uniqueMap {
+			values = append(values, f.CreateBoolValue(v))
 		}
 		return values
 	case []string:
-		values := make([]*Value, len(slice))
-		for idx, v := range slice {
-			values[idx] = f.CreateStringValue(v)
+		uniqueMap := map[string]struct{}{}
+		for _, v := range slice {
+			uniqueMap[v] = struct{}{}
+		}
+		values := make([]*Value, 0, len(uniqueMap))
+		for v := range uniqueMap {
+			values = append(values, f.CreateStringValue(v))
 		}
 		return values
 	case [][]byte:
-		values := make([]*Value, len(slice))
-		for idx, v := range slice {
-			values[idx] = f.CreateBytesValue(v)
+		uniqueMap := map[string]struct{}{}
+		for _, v := range slice {
+			uniqueMap[hex.EncodeToString(v)] = struct{}{}
+		}
+		values := make([]*Value, 0, len(uniqueMap))
+		for v := range uniqueMap {
+			bytes, _ := hex.DecodeString(v)
+			values = append(values, f.CreateBytesValue(bytes))
 		}
 		return values
 	case []time.Time:
-		values := make([]*Value, len(slice))
-		for idx, v := range slice {
-			values[idx] = f.CreateTimeValue(v)
+		uniqueMap := map[time.Time]struct{}{}
+		for _, v := range slice {
+			uniqueMap[v] = struct{}{}
+		}
+		values := make([]*Value, 0, len(uniqueMap))
+		for v := range uniqueMap {
+			values = append(values, f.CreateTimeValue(v))
 		}
 		return values
 	default:
