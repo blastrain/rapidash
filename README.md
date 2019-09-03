@@ -318,7 +318,7 @@ func main() {
 	}
 
 	// Create `*rapidash.Rapidash` instance with ServerAddrs option
-	cache, err := rapidash.New(rapidash.ServerAddrs("localhost:11211"))
+	cache, err := rapidash.New(rapidash.ServerAddrs([]string{"localhost:11211"}))
 	if err != nil {
 		panic(err)
 	}
@@ -358,6 +358,100 @@ func main() {
 
 ## 5.3 Generic caching
 
+### 5.3.1 Encode/Decode
+
+#### Primitive Types
+
+`int` , `int8` , `int16` , `int32` , `int64` ,
+`uint` , `uint8` , `uint16` , `uint32`, `uint64` ,
+`float32`, `float64` , `[]byte` , `string` , `bool`
+
+The above types can use API like `rapidash.Int(1)` and `rapidash.IntPtr(v)` ( ※ `v` is `*int` type ) for encoding and decoding .
+
+#### Primitive Slice Types
+
+`[]int` , `[]int8` , `[]int16` , `[]int32` , `[]int64` ,
+`[]uint` , `[]uint8` , `[]uint16` , `[]uint32`, `[]uint64` ,
+`[]float32`, `[]float64` , `[][]byte` , `[]string` , `[]bool`
+
+The above types can use API like `rapidash.Ints([]int{1})` and `rapidash.IntsPtr(v)` ( ※ `v` is `*[]int` type ) for encoding and decoding .
+
+#### Struct type
+
+*Struct* type can encode/decode by `(*rapidash.Struct).Cast()` like the following.
+
+```go
+
+type User struct {
+  ID int64
+  Name string
+}
+
+func (u *User) EncodeRapidash(enc rapidash.Encoder) error {
+    enc.Int64("id", u.ID)
+    enc.String("name", u.Name)
+    return enc.Error()
+}
+
+func (u *User) DecodeRapidash(dec rapidash.Decoder) error {
+    u.ID = dec.Int64("id")
+    u.Name = dec.String("name")
+    return dec.Error()
+}
+
+func (u *User) Struct() *rapidash.Struct {
+    return rapidash.NewStruct("users").FieldInt64("id").FieldString("name")
+}
+
+UserType := new(User).Struct()
+tx.Create("user", UserType.Cast(&User{ID: 1, Name: "john"})) // encode
+
+var user User
+tx.Find("user", UserType.Cast(&user)) // decode
+```
+
+#### Struct Slice Type
+
+*Struct Slice* type can encode/decode by `rapidash.Structs()` like the following.
+
+```go
+
+type Users []*User
+
+func (u *Users) EncodeRapidash(enc rapidash.Encoder) error {
+	for _, v := range *u {
+		if err := v.EncodeRapidash(enc.New()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (u *Users) DecodeRapidash(dec rapidash.Decoder) error {
+	len := dec.Len()
+	*u = make([]*User, len)
+	for i := 0; i < len; i++ {
+		var v User
+		if err := v.DecodeRapidash(dec.At(i)); err != nil {
+			return err
+		}
+		(*u)[i] = &v
+	}
+	return nil
+}
+
+UserType := new(User).Struct()
+users := Users{}
+users = append(users, &User{ID: 1, Name: "john"})
+tx.Create("user", rapidash.Structs(users, UserType)) // encode
+
+var u Users
+tx.Find("user", rapidash.Structs(&u, UserType)) // decode
+```
+
+
+### 5.3.2 Example
+
 ※ Previously, we start `memcached` with `11211` port.
 
 ```go
@@ -369,7 +463,7 @@ import (
 
 func main() {
 	// Create `*rapidash.Rapidash` instance with ServerAddrs option
-	cache, err := rapidash.New(rapidash.ServerAddrs("localhost:11211"))
+	cache, err := rapidash.New(rapidash.ServerAddrs([]string{"localhost:11211"}))
 	if err != nil {
 		panic(err)
 	}
