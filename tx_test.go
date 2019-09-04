@@ -493,12 +493,23 @@ func TestTx_CountByQueryBuilder(t *testing.T) {
 		NotEqualf(t, count, 0, "failed count")
 		NoError(t, tx.Commit())
 	})
-	t.Run("count slc table(or unknown table)", func(t *testing.T) {
+	t.Run("count slc table", func(t *testing.T) {
 		tx, err := cache.Begin(conn)
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
 		builder := NewQueryBuilder("user_logins")
+		count, err := tx.CountByQueryBuilder(builder)
+		NoError(t, err)
+		NotEqualf(t, count, 0, "failed count")
+		NoError(t, tx.Commit())
+	})
+	t.Run("unknown table)", func(t *testing.T) {
+		tx, err := cache.Begin(conn)
+		NoError(t, err)
+		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
+
+		builder := NewQueryBuilder("unknown")
 		if _, err := tx.CountByQueryBuilder(builder); err == nil {
 			t.Fatal("err is nil")
 		}
@@ -518,6 +529,15 @@ func TestTx_FindAllByTable(t *testing.T) {
 		NoError(t, tx.FindAllByTable("events", &events))
 
 		Equalf(t, len(events), int(count), "invalid events length")
+
+		builder = NewQueryBuilder("user_logins")
+		count, err = tx.CountByQueryBuilder(builder)
+		NoError(t, err)
+		var userLogins UserLogins
+		NoError(t, tx.FindByQueryBuilder(builder, &userLogins))
+
+		Equalf(t, len(userLogins), int(count), "invalid user_logins length")
+
 		NoError(t, tx.Commit())
 	})
 	t.Run("findAll slc table(or unknown table)", func(t *testing.T) {

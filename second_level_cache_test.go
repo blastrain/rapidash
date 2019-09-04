@@ -1688,3 +1688,34 @@ func benchmarkSLCINRapidash(b *testing.B) {
 		panic("invalid user_login number")
 	}
 }
+
+func TestCountQuerySLC(t *testing.T) {
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	NoError(t, slc.WarmUp(conn))
+	builder := NewQueryBuilder("user_logins").
+		Eq("user_id", uint64(1))
+	tx, err := cache.Begin(conn)
+	if err != nil {
+		panic(err)
+	}
+	count, err := slc.CountByQueryBuilder(context.Background(), tx, builder)
+	NoError(t, err)
+	if count != 1 {
+		t.Fatal("cannot work count")
+	}
+}
+
+func TestCountByQueryBuilderCaseDatabaseRecordIsEmptySLC(t *testing.T) {
+	slc := NewSecondLevelCache(emptyType(), cache.cacheServer, TableOption{})
+	NoError(t, slc.WarmUp(conn))
+	builder := NewQueryBuilder("empties").Eq("id", uint64(1))
+	tx, err := cache.Begin(conn)
+	if err != nil {
+		panic(err)
+	}
+	count, err := slc.CountByQueryBuilder(context.Background(), tx, builder)
+	NoError(t, err)
+	if count != 0 {
+		t.Fatal("cannot work count")
+	}
+}

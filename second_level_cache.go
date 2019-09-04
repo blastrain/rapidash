@@ -1346,3 +1346,15 @@ func (c *SecondLevelCache) findValuesByQueryBuilderWithoutCache(ctx context.Cont
 	}
 	return foundValues, nil
 }
+
+func (c *SecondLevelCache) CountByQueryBuilder(ctx context.Context, tx *Tx, builder *QueryBuilder) (uint64, error) {
+	defer builder.Release()
+	values, err := c.findValuesByQueryBuilder(ctx, tx, builder)
+	if err != nil {
+		return 0, xerrors.Errorf("failed to count by query builder: %w", err)
+	}
+	if values == nil {
+		return 0, nil
+	}
+	return uint64(values.Len()), nil
+}
