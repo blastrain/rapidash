@@ -418,6 +418,14 @@ func (tx *Tx) FindByQueryBuilderContext(ctx context.Context, builder *QueryBuild
 }
 
 func (tx *Tx) CountByQueryBuilder(builder *QueryBuilder) (uint64, error) {
+	 count, err := tx.CountByQueryBuilderContext(context.Background(), builder)
+	 if err != nil {
+	 	return 0, err
+	 }
+	 return count, nil
+}
+
+func (tx *Tx) CountByQueryBuilderContext(ctx context.Context, builder *QueryBuilder) (uint64, error) {
 	if c, exists := tx.r.firstLevelCaches.get(builder.tableName); exists {
 		count, err := c.CountByQueryBuilder(builder)
 		if err != nil {
@@ -426,7 +434,7 @@ func (tx *Tx) CountByQueryBuilder(builder *QueryBuilder) (uint64, error) {
 		return count, nil
 	}
 	if c, exists := tx.r.secondLevelCaches.get(builder.tableName); exists {
-		count, err := c.CountByQueryBuilder(context.Background(), tx, builder)
+		count, err := c.CountByQueryBuilder(ctx, tx, builder)
 		if err != nil {
 			return 0, xerrors.Errorf("failed to CountByQueryBuilder of SecondLevelCache: %w", err)
 		}
