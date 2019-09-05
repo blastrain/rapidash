@@ -420,7 +420,7 @@ func (tx *Tx) FindByQueryBuilderContext(ctx context.Context, builder *QueryBuild
 func (tx *Tx) CountByQueryBuilder(builder *QueryBuilder) (uint64, error) {
 	 count, err := tx.CountByQueryBuilderContext(context.Background(), builder)
 	 if err != nil {
-	 	return 0, err
+	 	return 0, xerrors.Errorf("failed to CountByQueryBuilderContext: %w", err)
 	 }
 	 return count, nil
 }
