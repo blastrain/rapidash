@@ -330,7 +330,7 @@ func TestOrderQuery(t *testing.T) {
 	}
 }
 
-func TestCountQuery(t *testing.T) {
+func TestCountQueryFLC(t *testing.T) {
 	flc := NewFirstLevelCache(eventType())
 	NoError(t, flc.WarmUp(conn))
 	builder := NewQueryBuilder("events").
@@ -470,7 +470,7 @@ func TestFindByQueryBuilderCaseDatabaseRecordIsEmpty(t *testing.T) {
 	}
 }
 
-func TestCountByQueryBuilderCaseDatabaseRecordIsEmpty(t *testing.T) {
+func TestCountByQueryBuilderCaseDatabaseRecordIsEmptyFLC(t *testing.T) {
 	flc := NewFirstLevelCache(emptyType())
 	NoError(t, flc.WarmUp(conn))
 	builder := NewQueryBuilder("empties").Eq("id", uint64(1))
