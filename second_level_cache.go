@@ -437,15 +437,6 @@ func (c *SecondLevelCache) deletePrimaryKey(tx *Tx, key server.CacheKey) error {
 	return nil
 }
 
-func (c *SecondLevelCache) deleteUniqueKey(tx *Tx, key server.CacheKey) error {
-	log.Delete(tx.id, SLCStash, key)
-	tx.stash.uniqueKeyToPrimaryKey[key.String()] = nil
-	if err := c.delete(tx, key); err != nil {
-		return xerrors.Errorf("failed to delete unique key: %w", err)
-	}
-	return nil
-}
-
 func (c *SecondLevelCache) deleteUniqueKeyOrOldKey(tx *Tx, key server.CacheKey) error {
 	log.Delete(tx.id, SLCStash, key)
 	tx.stash.uniqueKeyToPrimaryKey[key.String()] = nil
@@ -612,7 +603,7 @@ func (c *SecondLevelCache) setPrimaryKeysByUniqueKeys(tx *Tx, queryIter *QueryIt
 		uniqueKey := queryIter.Key()
 		primaryKey, exists := tx.stash.uniqueKeyToPrimaryKey[uniqueKey.String()]
 		if exists {
-			queryIter.SetPrimaryKey(primaryKey)
+			queryIter.SetPrimaryKey(tx, primaryKey)
 		} else {
 			requestKeys = append(requestKeys, uniqueKey)
 		}
@@ -707,7 +698,7 @@ func (c *SecondLevelCache) findValuesByCache(tx *Tx, builder *QueryBuilder, quer
 		switch indexType {
 		case IndexTypePrimaryKey:
 			for iter.Next() {
-				iter.SetPrimaryKey(iter.Key())
+				iter.SetPrimaryKey(tx, iter.Key())
 			}
 		case IndexTypeUniqueKey:
 			if err := c.setPrimaryKeysByUniqueKeys(tx, iter); err != nil {
@@ -1173,13 +1164,13 @@ func (c *SecondLevelCache) deleteKeyByQueryBuilder(tx *Tx, builder *QueryBuilder
 		switch indexType {
 		case IndexTypePrimaryKey:
 			for iter.Next() {
-				if err := c.deletePrimaryKey(tx, iter.Key()); err != nil {
-					return xerrors.Errorf("failed to delete primary key: %w", err)
+				if err := c.deleteOldKey(tx, iter.Key()); err != nil {
+					return xerrors.Errorf("failed to delete old key: %w", err)
 				}
 			}
 		case IndexTypeUniqueKey:
 			for iter.Next() {
-				if err := c.deleteUniqueKey(tx, iter.Key()); err != nil {
+				if err := c.deleteOldKey(tx, iter.Key()); err != nil {
 					return xerrors.Errorf("failed to delete unique key: %w", err)
 				}
 			}

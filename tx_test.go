@@ -388,6 +388,14 @@ func TestTx_CreateByTableContext(t *testing.T) {
 		id, err := tx.CreateByTableContext(context.Background(), "user_logins", userLogin)
 		NoError(t, err)
 		NotEqualf(t, id, 0, "last insert id is zero")
+		var findUserFromSLCByPrimaryKey UserLogin
+		builder := NewQueryBuilder("user_logins").Eq("id", uint64(0))
+		tx.FindByQueryBuilder(builder, &findUserFromSLCByPrimaryKey)
+		Equal(t, findUserFromSLCByPrimaryKey.ID, userLogin.ID)
+		var findUserFromSLCByUniqueKey UserLogin
+		builder = NewQueryBuilder("user_logins").Eq("user_id", uint64(0)).Eq("user_session_id", uint64(1000))
+		tx.FindByQueryBuilder(builder, &findUserFromSLCByUniqueKey)
+		Equal(t, findUserFromSLCByPrimaryKey.ID, userLogin.ID)
 		NoError(t, tx.Commit())
 	})
 	t.Run("create by unknown table", func(t *testing.T) {

@@ -91,9 +91,14 @@ func (i *QueryIterator) Error() error {
 	return i.results[i.currentIndex].err
 }
 
-func (i *QueryIterator) SetPrimaryKey(primaryKey server.CacheKey) {
+func (i *QueryIterator) SetPrimaryKey(tx *Tx, primaryKey server.CacheKey) {
 	result := i.results[i.currentIndex]
 	if primaryKey != nil && primaryKey.String() != "" {
+		if _, exists := tx.stash.oldKey[primaryKey.String()]; exists {
+			// need lookup db
+			i.SetErrorWithKey(primaryKey, server.ErrCacheMiss)
+			return
+		}
 		result.primaryKeys = []server.CacheKey{primaryKey}
 	}
 	i.primaryKeyToQueryMap[primaryKey] = result.query
