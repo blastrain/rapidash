@@ -547,6 +547,11 @@ func (c *SecondLevelCache) decodeMultiplePrimaryKeys(content []byte, flags uint3
 func (c *SecondLevelCache) findByPrimaryKeys(tx *Tx, valueIter *ValueIterator) error {
 	requestKeys := []server.CacheKey{}
 	for valueIter.Next() {
+		if _, exists := tx.stash.oldKey[valueIter.PrimaryKey().String()]; exists {
+			// need lookup db
+			valueIter.SetErrorWithKey(valueIter.PrimaryKey(), server.ErrCacheMiss)
+			continue
+		}
 		value, exists := tx.stash.primaryKeyToValue[valueIter.PrimaryKey().String()]
 		if exists {
 			log.Get(tx.id, SLCStash, valueIter.PrimaryKey(), value)
@@ -601,9 +606,14 @@ func (c *SecondLevelCache) setPrimaryKeysByUniqueKeys(tx *Tx, queryIter *QueryIt
 	defer queryIter.Reset()
 	for queryIter.Next() {
 		uniqueKey := queryIter.Key()
+		if _, exists := tx.stash.oldKey[uniqueKey.String()]; exists {
+			// need lookup db
+			queryIter.SetErrorWithKey(uniqueKey, server.ErrCacheMiss)
+			continue
+		}
 		primaryKey, exists := tx.stash.uniqueKeyToPrimaryKey[uniqueKey.String()]
 		if exists {
-			queryIter.SetPrimaryKey(tx, primaryKey)
+			queryIter.SetPrimaryKey(primaryKey)
 		} else {
 			requestKeys = append(requestKeys, uniqueKey)
 		}
@@ -698,7 +708,7 @@ func (c *SecondLevelCache) findValuesByCache(tx *Tx, builder *QueryBuilder, quer
 		switch indexType {
 		case IndexTypePrimaryKey:
 			for iter.Next() {
-				iter.SetPrimaryKey(tx, iter.Key())
+				iter.SetPrimaryKey(iter.Key())
 			}
 		case IndexTypeUniqueKey:
 			if err := c.setPrimaryKeysByUniqueKeys(tx, iter); err != nil {

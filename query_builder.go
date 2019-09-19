@@ -91,7 +91,7 @@ func (i *QueryIterator) Error() error {
 	return i.results[i.currentIndex].err
 }
 
-func (i *QueryIterator) SetPrimaryKey(tx *Tx, primaryKey server.CacheKey) {
+func (i *QueryIterator) SetPrimaryKey(primaryKey server.CacheKey) {
 	result := i.results[i.currentIndex]
 	if primaryKey != nil && primaryKey.String() != "" {
 		result.primaryKeys = []server.CacheKey{primaryKey}
