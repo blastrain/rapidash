@@ -390,11 +390,11 @@ func TestTx_CreateByTableContext(t *testing.T) {
 		NotEqualf(t, id, 0, "last insert id is zero")
 		var findUserFromSLCByPrimaryKey UserLogin
 		builder := NewQueryBuilder("user_logins").Eq("id", uint64(0))
-		tx.FindByQueryBuilder(builder, &findUserFromSLCByPrimaryKey)
+		NoError(t, tx.FindByQueryBuilder(builder, &findUserFromSLCByPrimaryKey))
 		Equal(t, findUserFromSLCByPrimaryKey.ID, userLogin.ID)
 		var findUserFromSLCByUniqueKey UserLogin
 		builder = NewQueryBuilder("user_logins").Eq("user_id", uint64(0)).Eq("user_session_id", uint64(1000))
-		tx.FindByQueryBuilder(builder, &findUserFromSLCByUniqueKey)
+		NoError(t, tx.FindByQueryBuilder(builder, &findUserFromSLCByUniqueKey))
 		Equal(t, findUserFromSLCByPrimaryKey.ID, userLogin.ID)
 		NoError(t, tx.Commit())
 	})
