@@ -437,15 +437,6 @@ func (c *SecondLevelCache) deletePrimaryKey(tx *Tx, key server.CacheKey) error {
 	return nil
 }
 
-func (c *SecondLevelCache) deleteUniqueKey(tx *Tx, key server.CacheKey) error {
-	log.Delete(tx.id, SLCStash, key)
-	tx.stash.uniqueKeyToPrimaryKey[key.String()] = nil
-	if err := c.delete(tx, key); err != nil {
-		return xerrors.Errorf("failed to delete unique key: %w", err)
-	}
-	return nil
-}
-
 func (c *SecondLevelCache) deleteUniqueKeyOrOldKey(tx *Tx, key server.CacheKey) error {
 	log.Delete(tx.id, SLCStash, key)
 	tx.stash.uniqueKeyToPrimaryKey[key.String()] = nil
@@ -556,6 +547,11 @@ func (c *SecondLevelCache) decodeMultiplePrimaryKeys(content []byte, flags uint3
 func (c *SecondLevelCache) findByPrimaryKeys(tx *Tx, valueIter *ValueIterator) error {
 	requestKeys := []server.CacheKey{}
 	for valueIter.Next() {
+		if _, exists := tx.stash.oldKey[valueIter.PrimaryKey().String()]; exists {
+			// need lookup db
+			valueIter.SetErrorWithKey(valueIter.PrimaryKey(), server.ErrCacheMiss)
+			continue
+		}
 		value, exists := tx.stash.primaryKeyToValue[valueIter.PrimaryKey().String()]
 		if exists {
 			log.Get(tx.id, SLCStash, valueIter.PrimaryKey(), value)
@@ -610,6 +606,11 @@ func (c *SecondLevelCache) setPrimaryKeysByUniqueKeys(tx *Tx, queryIter *QueryIt
 	defer queryIter.Reset()
 	for queryIter.Next() {
 		uniqueKey := queryIter.Key()
+		if _, exists := tx.stash.oldKey[uniqueKey.String()]; exists {
+			// need lookup db
+			queryIter.SetErrorWithKey(uniqueKey, server.ErrCacheMiss)
+			continue
+		}
 		primaryKey, exists := tx.stash.uniqueKeyToPrimaryKey[uniqueKey.String()]
 		if exists {
 			queryIter.SetPrimaryKey(primaryKey)
@@ -1173,14 +1174,14 @@ func (c *SecondLevelCache) deleteKeyByQueryBuilder(tx *Tx, builder *QueryBuilder
 		switch indexType {
 		case IndexTypePrimaryKey:
 			for iter.Next() {
-				if err := c.deletePrimaryKey(tx, iter.Key()); err != nil {
-					return xerrors.Errorf("failed to delete primary key: %w", err)
+				if err := c.deleteOldKey(tx, iter.Key()); err != nil {
+					return xerrors.Errorf("failed to delete old key: %w", err)
 				}
 			}
 		case IndexTypeUniqueKey:
 			for iter.Next() {
-				if err := c.deleteUniqueKey(tx, iter.Key()); err != nil {
-					return xerrors.Errorf("failed to delete unique key: %w", err)
+				if err := c.deleteOldKey(tx, iter.Key()); err != nil {
+					return xerrors.Errorf("failed to delete old key: %w", err)
 				}
 			}
 		case IndexTypeKey:
