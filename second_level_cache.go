@@ -1181,7 +1181,7 @@ func (c *SecondLevelCache) deleteKeyByQueryBuilder(tx *Tx, builder *QueryBuilder
 		case IndexTypeUniqueKey:
 			for iter.Next() {
 				if err := c.deleteOldKey(tx, iter.Key()); err != nil {
-					return xerrors.Errorf("failed to delete unique key: %w", err)
+					return xerrors.Errorf("failed to delete old key: %w", err)
 				}
 			}
 		case IndexTypeKey:
