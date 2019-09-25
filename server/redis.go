@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -117,6 +118,8 @@ func (c *RedisClient) Add(key CacheKey, value []byte, expiration time.Duration) 
 }
 
 func (c *RedisClient) Delete(key CacheKey) error {
+	fmt.Println("RedisClient.Delete() Start")
+	fmt.Printf("key:%v\n", key)
 	if err := c.delete(key); err != nil {
 		if err == ErrRedisCacheMiss {
 			// ignore cache miss
@@ -128,12 +131,17 @@ func (c *RedisClient) Delete(key CacheKey) error {
 }
 
 func (c *RedisClient) Flush() error {
-	if err := c.client.slcSelector.Each(c.flushAllFromAddr); err != nil {
-		return xerrors.Errorf("failed to flush second level cache: %w", err)
+	if c.client.slcSelector != nil {
+		if err := c.client.slcSelector.Each(c.flushAllFromAddr); err != nil {
+			return xerrors.Errorf("failed to flush second level cache: %w", err)
+		}
 	}
 
-	if err := c.client.llcSelector.Each(c.flushAllFromAddr); err != nil {
-		return xerrors.Errorf("failed to flush last level cache: %w", err)
+	if c.client.llcSelector != nil {
+		if err := c.client.llcSelector.Each(c.flushAllFromAddr); err != nil {
+			return xerrors.Errorf("failed to flush last level cache: %w", err)
+		}
+
 	}
 
 	return nil
@@ -209,6 +217,7 @@ func (c *RedisClient) add(rc redis.Conn, item *Item) error {
 
 func (c *RedisClient) delete(key CacheKey) error {
 	return c.client.withKeyAddr(key, func(addr net.Addr) (e error) {
+		fmt.Printf("addr:%v\n", addr)
 		cn, err := c.client.getConn(addr)
 		if err != nil {
 			return err
