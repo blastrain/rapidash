@@ -14,13 +14,13 @@ func TestConfig(t *testing.T) {
 }
 
 func TestConfigWithSlcOptionAndLlcOption(t *testing.T) {
-	cfg, err := NewConfig("testdata/cache_with_slc_option_and_llc_option.yml")
+	cfg, err := NewConfig("testdata/cache_use_slc_option_and_llc_option.yml")
 	NoError(t, err)
 	testConfig(t, cfg)
 }
 
 func TestConfigWithSlcTableOptionAndLlcTagOption(t *testing.T) {
-	cfg, err := NewConfig("testdata/cache_with_slc_table_option_and_llc_tag_option.yml")
+	cfg, err := NewConfig("testdata/cache_use_slc_table_option_and_llc_tag_option.yml")
 	NoError(t, err)
 	testConfig(t, cfg)
 }

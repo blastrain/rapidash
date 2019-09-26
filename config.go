@@ -240,7 +240,7 @@ func (cfg *LLCConfig) Options() []OptionFunc {
 }
 
 func (cfg *TagConfig) Options(tag string) []OptionFunc {
-	var opts []OptionFunc
+	opts := []OptionFunc{}
 	if cfg.Server != nil {
 		opts = append(opts, LastLevelCacheTagServer(tag, *cfg.Server))
 	}

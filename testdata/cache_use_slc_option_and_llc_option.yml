@@ -4,7 +4,7 @@ rule:
     - localhost:11211
   logger:
     mode: console
-    enabled: false
+    enabled: true
   retry:
     limit: 3
     interval: 30000

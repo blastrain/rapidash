@@ -113,9 +113,10 @@ func SecondLevelCacheTableShardKey(table string, shardKey string) OptionFunc {
 func SecondLevelCacheTableServer(table string, server ServerConfig) OptionFunc {
 	return func(r *Rapidash) {
 		opt := r.opt.slcTableOpt[table]
-		opt.server = &ServerOption{}
-		opt.server.typ = server.Type
-		opt.server.addr = server.Addr
+		opt.server = &ServerOption{
+			typ:  server.Type,
+			addr: server.Addr,
+		}
 		r.opt.slcTableOpt[table] = opt
 	}
 }
@@ -179,8 +180,10 @@ func LastLevelCachePessimisticLock(enabled bool) OptionFunc {
 func LastLevelCacheTagServer(tag string, server ServerConfig) OptionFunc {
 	return func(r *Rapidash) {
 		opt := r.opt.llcOpt.tagOpt[tag]
-		opt.server.typ = server.Type
-		opt.server.addr = server.Addr
+		opt.server = ServerOption{
+			typ: server.Type,
+			addr: server.Addr,
+		}
 		r.opt.llcOpt.tagOpt[tag] = opt
 	}
 }
