@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -118,8 +117,6 @@ func (c *RedisClient) Add(key CacheKey, value []byte, expiration time.Duration) 
 }
 
 func (c *RedisClient) Delete(key CacheKey) error {
-	fmt.Println("RedisClient.Delete() Start")
-	fmt.Printf("key:%v\n", key)
 	if err := c.delete(key); err != nil {
 		if err == ErrRedisCacheMiss {
 			// ignore cache miss
@@ -217,7 +214,6 @@ func (c *RedisClient) add(rc redis.Conn, item *Item) error {
 
 func (c *RedisClient) delete(key CacheKey) error {
 	return c.client.withKeyAddr(key, func(addr net.Addr) (e error) {
-		fmt.Printf("addr:%v\n", addr)
 		cn, err := c.client.getConn(addr)
 		if err != nil {
 			return err

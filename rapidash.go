@@ -577,7 +577,6 @@ func (tx *Tx) sortedPendingQueryKeys() []string {
 
 func (tx *Tx) unlockAllKeys() error {
 	mergedErr := []string{}
-	fmt.Printf("len(tx.secondLevelCacheLockKey.lockKeys ):%v\n", len(tx.secondLevelCacheLockKey.lockKeys))
 	for tableName, lockKeys := range tx.secondLevelCacheLockKey.lockKeys {
 		for _, lockKey := range lockKeys {
 			if c, exists := tx.r.secondLevelCaches.get(tableName); exists {
@@ -589,19 +588,16 @@ func (tx *Tx) unlockAllKeys() error {
 			}
 		}
 	}
-	fmt.Printf("len(tx.lastLevelCacheLockKey.withoutTagLockKeys ):%v\n", len(tx.lastLevelCacheLockKey.withoutTagLockKeys))
 	for _, lockKey := range tx.lastLevelCacheLockKey.withoutTagLockKeys {
 		if err := tx.r.lastLevelCache.cacheServer.Delete(lockKey); err != nil {
 			mergedErr = append(mergedErr, err.Error())
 		}
 	}
-	fmt.Printf("len(tx.lastLevelCacheLockKey.withTagLockKeys ):%v\n", len(tx.lastLevelCacheLockKey.withTagLockKeys))
 	for tag, lockKeys := range tx.lastLevelCacheLockKey.withTagLockKeys {
 		for _, lockKey := range lockKeys {
 			if c, exists := tx.r.lastLevelCaches.get(tag); exists {
 				if err := c.cacheServer.Delete(lockKey); err != nil {
-					//mergedErr = append(mergedErr, err.Error())
-					return xerrors.Errorf("tag unlock key error: %w", err)
+					mergedErr = append(mergedErr, err.Error())
 				}
 			}
 		}
@@ -895,10 +891,8 @@ func (r *Rapidash) WarmUpSecondLevelCache(conn *sql.DB, typ *Struct) error {
 		}
 		switch tableOption.ServerType() {
 		case CacheServerTypeMemcached:
-			fmt.Println("case CacheServerTypeMemcached:")
 			cacheServer = server.NewMemcachedBySelectors(selectors.slcSelector, nil)
 		case CacheServerTypeRedis:
-			fmt.Println("case CacheServerTypeRedis:")
 			cacheServer = server.NewRedisBySelectors(selectors.slcSelector, nil)
 		}
 		cacheServer.SetTimeout(r.opt.timeout)
@@ -1033,7 +1027,6 @@ func (r *Rapidash) setServer() error {
 	}
 	if r.opt.llcOpt.tagOpt != nil && len(r.opt.llcOpt.tagOpt) > 0 {
 		for tagName, tagOption := range r.opt.llcOpt.tagOpt {
-			fmt.Printf("tagName:%v\n", tagName)
 			llcSelectors := &Selectors{}
 			if err := llcSelectors.setSelector([]string{}, []string{}, []string{tagOption.server.addr}); err != nil {
 				return xerrors.Errorf("failed to set cache server selector: %w", err)
@@ -1041,10 +1034,8 @@ func (r *Rapidash) setServer() error {
 			var cacheServer server.CacheServer
 			switch tagOption.server.typ {
 			case CacheServerTypeMemcached:
-				fmt.Println("case CacheServerTypeMemcached:")
 				cacheServer = server.NewMemcachedBySelectors(nil, llcSelectors.llcSelector)
 			case CacheServerTypeRedis:
-				fmt.Println("case CacheServerTypeRedis:")
 				cacheServer = server.NewRedisBySelectors(nil, llcSelectors.llcSelector)
 			case CacheServerTypeOnMemory:
 			}

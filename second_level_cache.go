@@ -256,8 +256,6 @@ func (c *SecondLevelCache) setupKey(constraint *sqlparser.Constraint) {
 }
 
 func (c *SecondLevelCache) lockKey(tx *Tx, key server.CacheKey) error {
-	fmt.Println("================= SecondLevelCache.lockKey() Start")
-	fmt.Printf("tableName:%v\n", c.typ.tableName)
 	value := &TxValue{
 		id:   tx.id,
 		key:  key.String(),
@@ -271,10 +269,8 @@ func (c *SecondLevelCache) lockKey(tx *Tx, key server.CacheKey) error {
 	log.Add(tx.id, lockKey, value)
 	var cacheServer server.CacheServer
 	if secondLevelCache, exists := tx.r.secondLevelCaches.get(c.typ.tableName); exists {
-		fmt.Println("user table option cache server")
 		cacheServer = secondLevelCache.cacheServer
 	} else {
-		fmt.Println("slc default cache server")
 		cacheServer = c.cacheServer
 	}
 	if err := cacheServer.Add(lockKey, bytes, c.opt.LockExpiration()); err != nil {

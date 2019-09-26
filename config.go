@@ -1,7 +1,6 @@
 package rapidash
 
 import (
-	"fmt"
 	"io/ioutil"
 	"time"
 
@@ -181,7 +180,6 @@ func (cfg *CacheControlConfig) TableOptions(table string) []OptionFunc {
 
 func (cfg *SLCConfig) Options() []OptionFunc {
 	opts := []OptionFunc{}
-	fmt.Printf("================= cfg.Servers:%v\n", cfg.Servers)
 	if cfg.Servers != nil {
 		opts = append(opts, SecondLevelCacheServers(*cfg.Servers))
 	}

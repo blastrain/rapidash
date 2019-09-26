@@ -139,7 +139,6 @@ func testConfig(t *testing.T, cfg *Config) {
 		tag := "a"
 		for i := 1; i <= 10; i++ {
 			key := fmt.Sprintf("key_with_tag_%s_%d", tag, i)
-			fmt.Printf("key:%v\n", key)
 			NoError(t, tx.CreateWithTag(tag, key, Int(1)))
 			var a int
 			NoError(t, tx.FindWithTag(tag, key, IntPtr(&a)))
@@ -155,7 +154,6 @@ func testConfig(t *testing.T, cfg *Config) {
 		tag := "b"
 		for i := 1; i <= 10; i++ {
 			key := fmt.Sprintf("key_with_tag_%s_%d", tag, i)
-			fmt.Printf("key:%v\n", key)
 			NoError(t, tx.CreateWithTag(tag, key, Int(1)))
 			var a int
 			NoError(t, tx.FindWithTag(tag, key, IntPtr(&a)))

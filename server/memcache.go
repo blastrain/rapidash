@@ -129,8 +129,6 @@ func (c *MemcachedClient) Add(key CacheKey, value []byte, expiration time.Durati
 }
 
 func (c *MemcachedClient) Delete(key CacheKey) error {
-	fmt.Println("MemcachedClient.Delete() Start")
-	fmt.Printf("key:%v\n", key)
 	if err := c.delete(key); err != nil {
 		if err == ErrMemcacheCacheMiss {
 			// ignore cache miss
@@ -244,7 +242,6 @@ func (c *MemcachedClient) Touch(key CacheKey, seconds int32) (err error) {
 }
 
 func (c *MemcachedClient) withAddrRw(addr net.Addr, fn func(*bufio.ReadWriter) error) (err error) {
-	fmt.Printf("addr:%v\n", addr)
 	cn, err := c.client.getConn(addr)
 	if err != nil {
 		return err
