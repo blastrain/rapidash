@@ -989,15 +989,7 @@ func (r *Rapidash) Flush() error {
 
 func (r *Rapidash) setServer() error {
 	s := &Selectors{}
-	slcServerAddrs := []string{}
-	if r.opt.slcServer != nil {
-		slcServerAddrs = r.opt.slcServer.addrs
-	}
-	llcServerAddrs := []string{}
-	if r.opt.llcServer != nil {
-		llcServerAddrs = r.opt.llcServer.addrs
-	}
-	if err := s.setSelector(r.opt.serverAddrs, slcServerAddrs, llcServerAddrs); err != nil {
+	if err := s.setSelector(r.opt.serverAddrs, []string{}, []string{}); err != nil {
 		return xerrors.Errorf("failed to set cache server selector: %w", err)
 	}
 	switch r.opt.serverType {
