@@ -27,7 +27,7 @@ func (c *LastLevelCache) cacheKey(tag, key string) (server.CacheKey, error) {
 		typ: server.CacheKeyTypeLLC,
 	}
 	if opt, exists := c.opt.tagOpt[tag]; exists {
-		addr, err := getAddr(*opt.server.addr)
+		addr, err := getAddr(opt.server.addr)
 		if err != nil {
 			return nil, xerrors.Errorf("cannot get addr: %w", err)
 		}

@@ -84,14 +84,14 @@ func (o *TableOption) ServerType() CacheServerType {
 	if o.server == nil {
 		return 0
 	}
-	return *o.server.typ
+	return o.server.typ
 }
 
 func (o *TableOption) ServerAddr() string {
 	if o.server == nil {
 		return ""
 	}
-	return *o.server.addr
+	return o.server.addr
 }
 
 func (o *TableOption) Expiration() time.Duration {
@@ -137,8 +137,8 @@ type TagOption struct {
 }
 
 type ServerOption struct {
-	typ  *CacheServerType
-	addr *string
+	typ  CacheServerType
+	addr string
 }
 
 type QueryLog struct {
@@ -1035,11 +1035,11 @@ func (r *Rapidash) setServer() error {
 		for tagName, tagOption := range r.opt.llcOpt.tagOpt {
 			fmt.Printf("tagName:%v\n", tagName)
 			llcSelectors := &Selectors{}
-			if err := llcSelectors.setSelector([]string{}, []string{}, []string{*tagOption.server.addr}); err != nil {
+			if err := llcSelectors.setSelector([]string{}, []string{}, []string{tagOption.server.addr}); err != nil {
 				return xerrors.Errorf("failed to set cache server selector: %w", err)
 			}
 			var cacheServer server.CacheServer
-			switch *tagOption.server.typ {
+			switch tagOption.server.typ {
 			case CacheServerTypeMemcached:
 				fmt.Println("case CacheServerTypeMemcached:")
 				cacheServer = server.NewMemcachedBySelectors(nil, llcSelectors.llcSelector)

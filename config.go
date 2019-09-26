@@ -70,8 +70,8 @@ type TagConfig struct {
 }
 
 type ServerConfig struct {
-	Type *CacheServerType `yaml:"type"`
-	Addr *string          `yaml:"addr"`
+	Type CacheServerType `yaml:"type"`
+	Addr string          `yaml:"addr"`
 }
 
 func NewConfig(path string) (*Config, error) {
