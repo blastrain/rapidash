@@ -1,7 +1,8 @@
 rule:
-  type: 0
   servers:
-    - localhost:11211
+    type: 0
+    addrs:
+      - localhost:11211
   logger:
     mode: console
     enabled: true

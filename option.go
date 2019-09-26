@@ -6,15 +6,12 @@ import (
 
 type OptionFunc func(*Rapidash)
 
-func ServerType(typ CacheServerType) OptionFunc {
+func Servers(servers ServersConfig) OptionFunc {
 	return func(r *Rapidash) {
-		r.opt.serverType = typ
-	}
-}
-
-func ServerAddrs(addrs []string) OptionFunc {
-	return func(r *Rapidash) {
-		r.opt.serverAddrs = addrs
+		r.opt.servers = &ServersOption{
+			typ:   servers.Type,
+			addrs: servers.Addrs,
+		}
 	}
 }
 
@@ -181,7 +178,7 @@ func LastLevelCacheTagServer(tag string, server ServerConfig) OptionFunc {
 	return func(r *Rapidash) {
 		opt := r.opt.llcOpt.tagOpt[tag]
 		opt.server = ServerOption{
-			typ: server.Type,
+			typ:  server.Type,
 			addr: server.Addr,
 		}
 		r.opt.llcOpt.tagOpt[tag] = opt

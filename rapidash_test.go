@@ -11,7 +11,7 @@ import (
 
 func TestServerChanging(t *testing.T) {
 	t.Run("remove and add server", func(t *testing.T) {
-		cache, err := New(ServerAddrs([]string{"localhost:11211"}), MaxIdleConnections(1000), Timeout(200*time.Millisecond))
+		cache, err := New(Servers(ServersConfig{Type: CacheServerTypeMemcached, Addrs: []string{"localhost:11211"}}), MaxIdleConnections(1000), Timeout(200*time.Millisecond))
 		NoError(t, err)
 		tx, err := cache.Begin()
 		NoErrorf(t, err, "cannot begin cache transaction")
@@ -24,7 +24,7 @@ func TestServerChanging(t *testing.T) {
 	})
 
 	t.Run("remove and add only slc server", func(t *testing.T) {
-		cache, err := New(ServerAddrs([]string{"localhost:11211"}), MaxIdleConnections(1000), Timeout(200*time.Millisecond))
+		cache, err := New(Servers(ServersConfig{Type: CacheServerTypeMemcached, Addrs: []string{"localhost:11211"}}), MaxIdleConnections(1000), Timeout(200*time.Millisecond))
 		NoError(t, err)
 		NoError(t, cache.WarmUp(conn, userLoginType(), false))
 		tx, err := cache.Begin(conn)
@@ -43,7 +43,7 @@ func TestServerChanging(t *testing.T) {
 	})
 
 	t.Run("remove and add only llc server", func(t *testing.T) {
-		cache, err := New(ServerAddrs([]string{"localhost:11211"}), MaxIdleConnections(1000), Timeout(200000000000))
+		cache, err := New(Servers(ServersConfig{Type: CacheServerTypeMemcached, Addrs: []string{"localhost:11211"}}), MaxIdleConnections(1000), Timeout(200000000000))
 		NoError(t, err)
 		tx, err := cache.Begin()
 		NoErrorf(t, err, "cannot begin cache transaction")

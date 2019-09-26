@@ -154,8 +154,7 @@ type QueryLog struct {
 }
 
 type Option struct {
-	serverType                 CacheServerType
-	serverAddrs                []string
+	servers                    *ServersOption
 	timeout                    time.Duration
 	maxIdleConnections         int
 	maxRetryCount              int
@@ -179,7 +178,7 @@ type Option struct {
 
 func defaultOption() Option {
 	return Option{
-		serverType:          CacheServerTypeMemcached,
+		servers:             &ServersOption{typ: CacheServerTypeMemcached},
 		timeout:             DefaultTimeout,
 		maxIdleConnections:  DefaultMaxIdleConns,
 		maxRetryCount:       3,
@@ -987,10 +986,10 @@ func (r *Rapidash) Flush() error {
 
 func (r *Rapidash) setServer() error {
 	s := &Selectors{}
-	if err := s.setSelector(r.opt.serverAddrs, []string{}, []string{}); err != nil {
+	if err := s.setSelector(r.opt.servers.addrs, []string{}, []string{}); err != nil {
 		return xerrors.Errorf("failed to set cache server selector: %w", err)
 	}
-	switch r.opt.serverType {
+	switch r.opt.servers.typ {
 	case CacheServerTypeMemcached:
 		r.cacheServer = server.NewMemcachedBySelectors(s.slcSelector, s.llcSelector)
 		r.lastLevelCache = NewLastLevelCache(r.cacheServer, r.opt.llcOpt)

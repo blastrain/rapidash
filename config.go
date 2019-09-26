@@ -15,7 +15,7 @@ type Config struct {
 }
 
 type RuleConfig struct {
-	Servers           *[]string           `yaml:"servers"`
+	Servers           *ServersConfig      `yaml:"servers"`
 	Logger            *LoggerConfig       `yaml:"logger"`
 	Retry             *RetryConfig        `yaml:"retry"`
 	CacheControl      *CacheControlConfig `yaml:"cache_control"`
@@ -104,7 +104,7 @@ func (cfg *Config) Options() []OptionFunc {
 func (cfg *RuleConfig) Options() []OptionFunc {
 	opts := []OptionFunc{}
 	if cfg.Servers != nil {
-		opts = append(opts, ServerAddrs(*cfg.Servers))
+		opts = append(opts, Servers(*cfg.Servers))
 	}
 	if cfg.MaxIdleConnection != nil {
 		opts = append(opts, MaxIdleConnections(*cfg.MaxIdleConnection))
