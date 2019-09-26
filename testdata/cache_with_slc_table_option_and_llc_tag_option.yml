@@ -15,9 +15,10 @@ rule:
   timeout: 200000000000
   max_idle_connection: 1000
 slc:
-  type: 0
   servers:
-    - localhost:11211
+    type: 0
+    addrs:
+      - localhost:11211
   tables:
     user_logins:
       server:
@@ -39,9 +40,10 @@ slc:
   lock_expiration: 90
   expiration: 0
 llc:
-  type: 0
   servers:
-    - localhost:11211
+    type: 0
+    addrs:
+      - localhost:11211
   tags:
     a:
       server:

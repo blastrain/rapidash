@@ -1,6 +1,7 @@
 package rapidash
 
 import (
+	"fmt"
 	"io/ioutil"
 	"time"
 
@@ -39,8 +40,7 @@ type CacheControlConfig struct {
 }
 
 type SLCConfig struct {
-	Type           *CacheServerType         `yaml:"type"`
-	Servers        *[]string                `yaml:"servers"`
+	Servers        *ServersConfig           `yaml:"servers"`
 	Tables         *map[string]*TableConfig `yaml:"tables"`
 	Expiration     *time.Duration           `yaml:"expiration"`
 	LockExpiration *time.Duration           `yaml:"lock_expiration"`
@@ -55,8 +55,7 @@ type TableConfig struct {
 }
 
 type LLCConfig struct {
-	Type           *CacheServerType       `yaml:"type"`
-	Servers        *[]string              `yaml:"servers"`
+	Servers        *ServersConfig         `yaml:"servers"`
 	Tags           *map[string]*TagConfig `yaml:"tags"`
 	CacheControl   *CacheControlConfig    `yaml:"cache_control"`
 	Expiration     *time.Duration         `yaml:"expiration"`
@@ -67,6 +66,11 @@ type TagConfig struct {
 	Server         *ServerConfig  `yaml:"server"`
 	Expiration     *time.Duration `yaml:"expiration"`
 	LockExpiration *time.Duration `yaml:"lock_expiration"`
+}
+
+type ServersConfig struct {
+	Type  CacheServerType `yaml:"type"`
+	Addrs []string        `yaml:"addrs"`
 }
 
 type ServerConfig struct {
@@ -177,11 +181,9 @@ func (cfg *CacheControlConfig) TableOptions(table string) []OptionFunc {
 
 func (cfg *SLCConfig) Options() []OptionFunc {
 	opts := []OptionFunc{}
-	if cfg.Type != nil {
-		opts = append(opts, SecondLevelCacheServerType(*cfg.Type))
-	}
+	fmt.Printf("================= cfg.Servers:%v\n", cfg.Servers)
 	if cfg.Servers != nil {
-		opts = append(opts, SecondLevelCacheServerAddrs(*cfg.Servers))
+		opts = append(opts, SecondLevelCacheServers(*cfg.Servers))
 	}
 	if cfg.Tables != nil {
 		for table, tableCfg := range *cfg.Tables {
@@ -219,11 +221,8 @@ func (cfg *TableConfig) Options(table string) []OptionFunc {
 
 func (cfg *LLCConfig) Options() []OptionFunc {
 	opts := []OptionFunc{}
-	if cfg.Type != nil {
-		opts = append(opts, LastLevelCacheServerType(*cfg.Type))
-	}
 	if cfg.Servers != nil {
-		opts = append(opts, LastLevelCacheServerAddrs(*cfg.Servers))
+		opts = append(opts, LastLevelCacheServer(*cfg.Servers))
 	}
 	if cfg.Tags != nil {
 		for tag, tagCfg := range *cfg.Tags {

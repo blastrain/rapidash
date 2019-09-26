@@ -18,27 +18,21 @@ func ServerAddrs(addrs []string) OptionFunc {
 	}
 }
 
-func SecondLevelCacheServerType(typ CacheServerType) OptionFunc {
+func SecondLevelCacheServers(servers ServersConfig) OptionFunc {
 	return func(r *Rapidash) {
-		r.opt.slcServerType = &typ
+		r.opt.slcServer = &ServersOption{
+			typ:   servers.Type,
+			addrs: servers.Addrs,
+		}
 	}
 }
 
-func SecondLevelCacheServerAddrs(addrs []string) OptionFunc {
+func LastLevelCacheServer(servers ServersConfig) OptionFunc {
 	return func(r *Rapidash) {
-		r.opt.slcServerAddrs = addrs
-	}
-}
-
-func LastLevelCacheServerType(typ CacheServerType) OptionFunc {
-	return func(r *Rapidash) {
-		r.opt.llcServerType = &typ
-	}
-}
-
-func LastLevelCacheServerAddrs(addrs []string) OptionFunc {
-	return func(r *Rapidash) {
-		r.opt.llcServerAddrs = addrs
+		r.opt.llcServer = &ServersOption{
+			typ:   servers.Type,
+			addrs: servers.Addrs,
+		}
 	}
 }
 

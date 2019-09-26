@@ -136,6 +136,11 @@ type TagOption struct {
 	lockExpiration time.Duration
 }
 
+type ServersOption struct {
+	typ   CacheServerType
+	addrs []string
+}
+
 type ServerOption struct {
 	typ  CacheServerType
 	addr string
@@ -158,8 +163,7 @@ type Option struct {
 	logMode                    LogModeType
 	logEnabled                 bool
 	logServerAddr              string
-	slcServerType              *CacheServerType
-	slcServerAddrs             []string
+	slcServer                  *ServersOption
 	slcLockExpiration          time.Duration
 	slcExpiration              time.Duration
 	slcOptimisticLock          bool
@@ -167,8 +171,7 @@ type Option struct {
 	slcIgnoreNewerCache        bool
 	slcTableOpt                map[string]TableOption
 	llcOpt                     *LastLevelCacheOption
-	llcServerType              *CacheServerType
-	llcServerAddrs             []string
+	llcServer                  *ServersOption
 	beforeCommitCallback       func(*Tx, []*QueryLog) error
 	afterCommitSuccessCallback func(*Tx) error
 	afterCommitFailureCallback func(*Tx, []*QueryLog) error
@@ -986,8 +989,15 @@ func (r *Rapidash) Flush() error {
 
 func (r *Rapidash) setServer() error {
 	s := &Selectors{}
-	fmt.Printf("======= r.opt.llcServerAddrs:%v\n", r.opt.llcServerAddrs)
-	if err := s.setSelector(r.opt.serverAddrs, r.opt.slcServerAddrs, r.opt.llcServerAddrs); err != nil {
+	slcServerAddrs := []string{}
+	if r.opt.slcServer != nil {
+		slcServerAddrs = r.opt.slcServer.addrs
+	}
+	llcServerAddrs := []string{}
+	if r.opt.llcServer != nil {
+		llcServerAddrs = r.opt.llcServer.addrs
+	}
+	if err := s.setSelector(r.opt.serverAddrs, slcServerAddrs, llcServerAddrs); err != nil {
 		return xerrors.Errorf("failed to set cache server selector: %w", err)
 	}
 	switch r.opt.serverType {
@@ -999,9 +1009,8 @@ func (r *Rapidash) setServer() error {
 		r.lastLevelCache = NewLastLevelCache(r.cacheServer, r.opt.llcOpt)
 	case CacheServerTypeOnMemory:
 	}
-	if r.opt.slcServerType != nil {
-		slcServerType := *r.opt.slcServerType
-		switch slcServerType {
+	if r.opt.slcServer != nil {
+		switch r.opt.slcServer.typ {
 		case CacheServerTypeMemcached:
 			r.cacheServer = server.NewMemcachedBySelectors(s.slcSelector, nil)
 		case CacheServerTypeRedis:
@@ -1015,9 +1024,8 @@ func (r *Rapidash) setServer() error {
 	if err := r.cacheServer.SetMaxIdleConnections(r.opt.maxIdleConnections); err != nil {
 		return xerrors.Errorf("failed to set max idle connections for cache server: %w", err)
 	}
-	if r.opt.llcServerType != nil {
-		llcServerType := *r.opt.llcServerType
-		switch llcServerType {
+	if r.opt.llcServer != nil {
+		switch r.opt.llcServer.typ {
 		case CacheServerTypeMemcached:
 			r.lastLevelCache = NewLastLevelCache(server.NewMemcachedBySelectors(nil, s.llcSelector), r.opt.llcOpt)
 		case CacheServerTypeRedis:
