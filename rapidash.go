@@ -895,8 +895,12 @@ func (r *Rapidash) WarmUpSecondLevelCache(conn *sql.DB, typ *Struct) error {
 		case CacheServerTypeRedis:
 			cacheServer = server.NewRedisBySelectors(selectors.slcSelector, nil)
 		}
-		cacheServer.SetTimeout(r.opt.timeout)
-		cacheServer.SetMaxIdleConnections(r.opt.maxIdleConnections)
+		if err := cacheServer.SetTimeout(r.opt.timeout); err != nil {
+			return xerrors.Errorf("failed to set timeout for cache server: %w", err)
+		}
+		if err := cacheServer.SetMaxIdleConnections(r.opt.maxIdleConnections); err != nil {
+			return xerrors.Errorf("failed to set max idle connections for cache server: %w", err)
+		}
 	} else {
 		cacheServer = r.cacheServer
 	}
@@ -1039,8 +1043,12 @@ func (r *Rapidash) setServer() error {
 				cacheServer = server.NewRedisBySelectors(nil, llcSelectors.llcSelector)
 			case CacheServerTypeOnMemory:
 			}
-			cacheServer.SetTimeout(r.opt.timeout)
-			cacheServer.SetMaxIdleConnections(r.opt.maxIdleConnections)
+			if err := cacheServer.SetTimeout(r.opt.timeout); err != nil {
+				return xerrors.Errorf("failed to set timeout for cache server: %w", err)
+			}
+			if err := cacheServer.SetMaxIdleConnections(r.opt.maxIdleConnections); err != nil {
+				return xerrors.Errorf("failed to set max idle connections for cache server: %w", err)
+			}
 			lastLevelCheServer := NewLastLevelCache(cacheServer, r.opt.llcOpt)
 			lastLevelCheServer.opt.expiration = tagOption.expiration
 			lastLevelCheServer.opt.lockExpiration = tagOption.lockExpiration
