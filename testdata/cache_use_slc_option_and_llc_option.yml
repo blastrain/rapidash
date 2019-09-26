@@ -15,3 +15,20 @@ rule:
     ignore_newer_cache: true
   timeout: 200000000000
   max_idle_connection: 1000
+slc:
+  servers:
+    type: 0
+    addrs:
+      - localhost:11211
+  lock_expiration: 90
+  expiration: 0
+llc:
+  servers:
+    type: 0
+    addrs:
+      - localhost:11211
+  cache_control:
+    optimistic_lock: false
+    pessimistic_lock: false
+  lock_expiration: 90
+  expiration: 3600

@@ -205,11 +205,15 @@ func (c *MemcachedClient) onItem(item *Item, fn func(*MemcachedClient, *bufio.Re
 }
 
 func (c *MemcachedClient) FlushAll() error {
-	if err := c.client.slcSelector.Each(c.flushAllFromAddr); err != nil {
-		return err
+	if c.client.slcSelector != nil {
+		if err := c.client.slcSelector.Each(c.flushAllFromAddr); err != nil {
+			return err
+		}
 	}
-	if err := c.client.llcSelector.Each(c.flushAllFromAddr); err != nil {
-		return err
+	if c.client.llcSelector != nil {
+		if err := c.client.llcSelector.Each(c.flushAllFromAddr); err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -128,12 +128,17 @@ func (c *RedisClient) Delete(key CacheKey) error {
 }
 
 func (c *RedisClient) Flush() error {
-	if err := c.client.slcSelector.Each(c.flushAllFromAddr); err != nil {
-		return xerrors.Errorf("failed to flush second level cache: %w", err)
+	if c.client.slcSelector != nil {
+		if err := c.client.slcSelector.Each(c.flushAllFromAddr); err != nil {
+			return xerrors.Errorf("failed to flush second level cache: %w", err)
+		}
 	}
 
-	if err := c.client.llcSelector.Each(c.flushAllFromAddr); err != nil {
-		return xerrors.Errorf("failed to flush last level cache: %w", err)
+	if c.client.llcSelector != nil {
+		if err := c.client.llcSelector.Each(c.flushAllFromAddr); err != nil {
+			return xerrors.Errorf("failed to flush last level cache: %w", err)
+		}
+
 	}
 
 	return nil

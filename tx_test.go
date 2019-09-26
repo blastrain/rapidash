@@ -249,8 +249,7 @@ func initCache(conn *sql.DB, typ CacheServerType) error {
 	}
 	var err error
 	cache, err = New(
-		ServerType(typ),
-		ServerAddrs(serverAddrs),
+		Servers(ServersConfig{Type: typ, Addrs: serverAddrs}),
 		LogMode(LogModeJSON),
 		LogEnabled(true),
 	)

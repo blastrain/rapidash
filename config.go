@@ -15,7 +15,7 @@ type Config struct {
 }
 
 type RuleConfig struct {
-	Servers           *[]string           `yaml:"servers"`
+	Servers           *ServersConfig      `yaml:"servers"`
 	Logger            *LoggerConfig       `yaml:"logger"`
 	Retry             *RetryConfig        `yaml:"retry"`
 	CacheControl      *CacheControlConfig `yaml:"cache_control"`
@@ -39,7 +39,7 @@ type CacheControlConfig struct {
 }
 
 type SLCConfig struct {
-	Servers        *[]string                `yaml:"servers"`
+	Servers        *ServersConfig           `yaml:"servers"`
 	Tables         *map[string]*TableConfig `yaml:"tables"`
 	Expiration     *time.Duration           `yaml:"expiration"`
 	LockExpiration *time.Duration           `yaml:"lock_expiration"`
@@ -47,14 +47,14 @@ type SLCConfig struct {
 
 type TableConfig struct {
 	ShardKey       *string             `yaml:"shard_key"`
-	Server         *string             `yaml:"server"`
+	Server         *ServerConfig       `yaml:"server"`
 	CacheControl   *CacheControlConfig `yaml:"cache_control"`
 	Expiration     *time.Duration      `yaml:"expiration"`
 	LockExpiration *time.Duration      `yaml:"lock_expiration"`
 }
 
 type LLCConfig struct {
-	Servers        *[]string
+	Servers        *ServersConfig         `yaml:"servers"`
 	Tags           *map[string]*TagConfig `yaml:"tags"`
 	CacheControl   *CacheControlConfig    `yaml:"cache_control"`
 	Expiration     *time.Duration         `yaml:"expiration"`
@@ -62,9 +62,19 @@ type LLCConfig struct {
 }
 
 type TagConfig struct {
-	Server         *string        `yaml:"server"`
+	Server         *ServerConfig  `yaml:"server"`
 	Expiration     *time.Duration `yaml:"expiration"`
 	LockExpiration *time.Duration `yaml:"lock_expiration"`
+}
+
+type ServersConfig struct {
+	Type  CacheServerType `yaml:"type"`
+	Addrs []string        `yaml:"addrs"`
+}
+
+type ServerConfig struct {
+	Type CacheServerType `yaml:"type"`
+	Addr string          `yaml:"addr"`
 }
 
 func NewConfig(path string) (*Config, error) {
@@ -82,15 +92,19 @@ func NewConfig(path string) (*Config, error) {
 func (cfg *Config) Options() []OptionFunc {
 	opts := []OptionFunc{}
 	opts = append(opts, cfg.Rule.Options()...)
-	opts = append(opts, cfg.SLC.Options()...)
-	opts = append(opts, cfg.LLC.Options()...)
+	if cfg.SLC != nil {
+		opts = append(opts, cfg.SLC.Options()...)
+	}
+	if cfg.LLC != nil {
+		opts = append(opts, cfg.LLC.Options()...)
+	}
 	return opts
 }
 
 func (cfg *RuleConfig) Options() []OptionFunc {
 	opts := []OptionFunc{}
 	if cfg.Servers != nil {
-		opts = append(opts, ServerAddrs(*cfg.Servers))
+		opts = append(opts, Servers(*cfg.Servers))
 	}
 	if cfg.MaxIdleConnection != nil {
 		opts = append(opts, MaxIdleConnections(*cfg.MaxIdleConnection))
@@ -167,7 +181,7 @@ func (cfg *CacheControlConfig) TableOptions(table string) []OptionFunc {
 func (cfg *SLCConfig) Options() []OptionFunc {
 	opts := []OptionFunc{}
 	if cfg.Servers != nil {
-		opts = append(opts, SecondLevelCacheServerAddrs(*cfg.Servers))
+		opts = append(opts, SecondLevelCacheServers(*cfg.Servers))
 	}
 	if cfg.Tables != nil {
 		for table, tableCfg := range *cfg.Tables {
@@ -189,7 +203,7 @@ func (cfg *TableConfig) Options(table string) []OptionFunc {
 		opts = append(opts, SecondLevelCacheTableShardKey(table, *cfg.ShardKey))
 	}
 	if cfg.Server != nil {
-		opts = append(opts, SecondLevelCacheTableServerAddr(table, *cfg.Server))
+		opts = append(opts, SecondLevelCacheTableServer(table, *cfg.Server))
 	}
 	if cfg.Expiration != nil {
 		opts = append(opts, SecondLevelCacheTableExpiration(table, *cfg.Expiration))
@@ -206,7 +220,7 @@ func (cfg *TableConfig) Options(table string) []OptionFunc {
 func (cfg *LLCConfig) Options() []OptionFunc {
 	opts := []OptionFunc{}
 	if cfg.Servers != nil {
-		opts = append(opts, LastLevelCacheServerAddrs(*cfg.Servers))
+		opts = append(opts, LastLevelCacheServer(*cfg.Servers))
 	}
 	if cfg.Tags != nil {
 		for tag, tagCfg := range *cfg.Tags {
@@ -228,7 +242,7 @@ func (cfg *LLCConfig) Options() []OptionFunc {
 func (cfg *TagConfig) Options(tag string) []OptionFunc {
 	opts := []OptionFunc{}
 	if cfg.Server != nil {
-		opts = append(opts, LastLevelCacheTagServerAddr(tag, *cfg.Server))
+		opts = append(opts, LastLevelCacheTagServer(tag, *cfg.Server))
 	}
 	if cfg.Expiration != nil {
 		opts = append(opts, LastLevelCacheTagExpiration(tag, *cfg.Expiration))

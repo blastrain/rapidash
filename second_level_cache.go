@@ -31,6 +31,27 @@ func (c *SecondLevelCacheMap) get(tableName string) (*SecondLevelCache, bool) {
 	return cache.(*SecondLevelCache), exists
 }
 
+func (c *SecondLevelCacheMap) keys() []string {
+	if c.length() != 0 {
+		keys := make([]string, c.length())
+		c.Range(func(key, value interface{}) bool {
+			keys = append(keys, key.(string))
+			return true
+		})
+		return keys
+	}
+	return []string{}
+}
+
+func (c *SecondLevelCacheMap) length() uint64 {
+	len := 0
+	c.Range(func(key, value interface{}) bool {
+		len++
+		return true
+	})
+	return uint64(len)
+}
+
 func NewSecondLevelCacheMap() *SecondLevelCacheMap {
 	return &SecondLevelCacheMap{&sync.Map{}}
 }
@@ -246,7 +267,13 @@ func (c *SecondLevelCache) lockKey(tx *Tx, key server.CacheKey) error {
 	}
 	lockKey := key.LockKey()
 	log.Add(tx.id, lockKey, value)
-	if err := c.cacheServer.Add(lockKey, bytes, c.opt.LockExpiration()); err != nil {
+	var cacheServer server.CacheServer
+	if secondLevelCache, exists := tx.r.secondLevelCaches.get(c.typ.tableName); exists {
+		cacheServer = secondLevelCache.cacheServer
+	} else {
+		cacheServer = c.cacheServer
+	}
+	if err := cacheServer.Add(lockKey, bytes, c.opt.LockExpiration()); err != nil {
 		content, getErr := c.cacheServer.Get(lockKey)
 		if IsCacheMiss(getErr) {
 			return xerrors.Errorf("fatal error. cannot add transaction key. but transaction key doesn't exist: %w", err)
@@ -262,7 +289,11 @@ func (c *SecondLevelCache) lockKey(tx *Tx, key server.CacheKey) error {
 		}
 		return xerrors.Errorf("lock key (%s) is already added. value is %s: %w", lockKey, value, err)
 	}
-	tx.lockKeys = append(tx.lockKeys, lockKey)
+	if _, exists := tx.secondLevelCacheLockKey.lockKeys[c.typ.tableName]; exists {
+		tx.secondLevelCacheLockKey.lockKeys[c.typ.tableName] = append(tx.secondLevelCacheLockKey.lockKeys[c.typ.tableName], lockKey)
+	} else {
+		tx.secondLevelCacheLockKey.lockKeys[c.typ.tableName] = []server.CacheKey{lockKey}
+	}
 	return nil
 }
 

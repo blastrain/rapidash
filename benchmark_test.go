@@ -181,7 +181,7 @@ func BenchmarkGetByPrimaryKey_RapidashWorst(b *testing.B) {
 		panic(err)
 	}
 	cache, err := New(
-		ServerAddrs([]string{"localhost:11211"}),
+		Servers(ServersConfig{Type: CacheServerTypeMemcached, Addrs: []string{"localhost:11211"}}),
 		SecondLevelCachePessimisticLock(false),
 		SecondLevelCacheOptimisticLock(false),
 	)
@@ -224,7 +224,7 @@ func BenchmarkGetByPrimaryKey_RapidashBest(b *testing.B) {
 	}
 	defer conn.Close()
 	cache, err := New(
-		ServerAddrs([]string{"localhost:11211"}),
+		Servers(ServersConfig{Type: CacheServerTypeMemcached, Addrs: []string{"localhost:11211"}}),
 		SecondLevelCachePessimisticLock(false),
 		SecondLevelCacheOptimisticLock(false),
 	)
@@ -336,7 +336,7 @@ func BenchmarkInsert_Rapidash(b *testing.B) {
 	}
 	defer conn.Close()
 	cache, err := New(
-		ServerAddrs([]string{"localhost:11211"}),
+		Servers(ServersConfig{Type: CacheServerTypeMemcached, Addrs: []string{"localhost:11211"}}),
 		SecondLevelCachePessimisticLock(false),
 		SecondLevelCacheOptimisticLock(false),
 	)
@@ -438,7 +438,7 @@ func BenchmarkUpdateByPrimaryKey_RapidashWorst(b *testing.B) {
 	}
 	defer conn.Close()
 	cache, err := New(
-		ServerAddrs([]string{"localhost:11211"}),
+		Servers(ServersConfig{Type: CacheServerTypeMemcached, Addrs: []string{"localhost:11211"}}),
 		SecondLevelCachePessimisticLock(false),
 		SecondLevelCacheOptimisticLock(false),
 	)
@@ -484,7 +484,7 @@ func BenchmarkUpdateByPrimaryKey_RapidashBest(b *testing.B) {
 	}
 	defer conn.Close()
 	cache, err := New(
-		ServerAddrs([]string{"localhost:11211"}),
+		Servers(ServersConfig{Type: CacheServerTypeMemcached, Addrs: []string{"localhost:11211"}}),
 		SecondLevelCachePessimisticLock(false),
 		SecondLevelCacheOptimisticLock(false),
 	)
@@ -598,7 +598,7 @@ func BenchmarkDeleteByPrimaryKey_Rapidash(b *testing.B) {
 	}
 	defer conn.Close()
 	cache, err := New(
-		ServerAddrs([]string{"localhost:11211"}),
+		Servers(ServersConfig{Type: CacheServerTypeMemcached, Addrs: []string{"localhost:11211"}}),
 		SecondLevelCachePessimisticLock(false),
 		SecondLevelCacheOptimisticLock(false),
 	)

@@ -3,6 +3,7 @@ package rapidash
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"net"
 	"sort"
 	"strings"
@@ -32,6 +33,7 @@ type Rapidash struct {
 	firstLevelCaches  *FirstLevelCacheMap
 	secondLevelCaches *SecondLevelCacheMap
 	lastLevelCache    *LastLevelCache
+	lastLevelCaches   *LastLevelCacheMap
 	opt               Option
 }
 
@@ -64,7 +66,7 @@ const (
 
 type TableOption struct {
 	shardKey        *string
-	server          *string
+	server          *ServerOption
 	expiration      *time.Duration
 	lockExpiration  *time.Duration
 	optimisticLock  *bool
@@ -78,11 +80,18 @@ func (o *TableOption) ShardKey() string {
 	return *o.shardKey
 }
 
-func (o *TableOption) Server() string {
+func (o *TableOption) ServerType() CacheServerType {
+	if o.server == nil {
+		return 0
+	}
+	return o.server.typ
+}
+
+func (o *TableOption) ServerAddr() string {
 	if o.server == nil {
 		return ""
 	}
-	return *o.server
+	return o.server.addr
 }
 
 func (o *TableOption) Expiration() time.Duration {
@@ -122,9 +131,19 @@ type LastLevelCacheOption struct {
 }
 
 type TagOption struct {
-	server         string
+	server         ServerOption
 	expiration     time.Duration
 	lockExpiration time.Duration
+}
+
+type ServersOption struct {
+	typ   CacheServerType
+	addrs []string
+}
+
+type ServerOption struct {
+	typ  CacheServerType
+	addr string
 }
 
 type QueryLog struct {
@@ -135,8 +154,7 @@ type QueryLog struct {
 }
 
 type Option struct {
-	serverType                 CacheServerType
-	serverAddrs                []string
+	servers                    *ServersOption
 	timeout                    time.Duration
 	maxIdleConnections         int
 	maxRetryCount              int
@@ -144,7 +162,7 @@ type Option struct {
 	logMode                    LogModeType
 	logEnabled                 bool
 	logServerAddr              string
-	slcServerAddrs             []string
+	slcServer                  *ServersOption
 	slcLockExpiration          time.Duration
 	slcExpiration              time.Duration
 	slcOptimisticLock          bool
@@ -152,7 +170,7 @@ type Option struct {
 	slcIgnoreNewerCache        bool
 	slcTableOpt                map[string]TableOption
 	llcOpt                     *LastLevelCacheOption
-	llcServerAddrs             []string
+	llcServer                  *ServersOption
 	beforeCommitCallback       func(*Tx, []*QueryLog) error
 	afterCommitSuccessCallback func(*Tx) error
 	afterCommitFailureCallback func(*Tx, []*QueryLog) error
@@ -160,7 +178,7 @@ type Option struct {
 
 func defaultOption() Option {
 	return Option{
-		serverType:          CacheServerTypeMemcached,
+		servers:             &ServersOption{typ: CacheServerTypeMemcached},
 		timeout:             DefaultTimeout,
 		maxIdleConnections:  DefaultMaxIdleConns,
 		maxRetryCount:       3,
@@ -195,14 +213,25 @@ type PendingQuery struct {
 	fn func() error
 }
 
+type SecondLevelCacheLockKey struct {
+	lockKeys map[string][]server.CacheKey
+}
+
+type LastLevelCacheLockKey struct {
+	withoutTagLockKeys []server.CacheKey
+	withTagLockKeys    map[string][]server.CacheKey
+}
+
 type Tx struct {
-	r              *Rapidash
-	conn           Connection
-	stash          *Stash
-	id             string
-	pendingQueries map[string]*PendingQuery
-	lockKeys       []server.CacheKey
-	isCommitted    bool
+	r                       *Rapidash
+	conn                    Connection
+	stash                   *Stash
+	id                      string
+	pendingQueries          map[string]*PendingQuery
+	lockKeys                []server.CacheKey
+	secondLevelCacheLockKey SecondLevelCacheLockKey
+	lastLevelCacheLockKey   LastLevelCacheLockKey
+	isCommitted             bool
 }
 
 type Stash struct {
@@ -234,12 +263,14 @@ func (r *Rapidash) Begin(conns ...Connection) (*Tx, error) {
 		conn = conns[0]
 	}
 	return &Tx{
-		r:              r,
-		conn:           conn,
-		stash:          NewStash(),
-		id:             xid.New().String(),
-		pendingQueries: map[string]*PendingQuery{},
-		lockKeys:       []server.CacheKey{},
+		r:                       r,
+		conn:                    conn,
+		stash:                   NewStash(),
+		id:                      xid.New().String(),
+		pendingQueries:          map[string]*PendingQuery{},
+		lockKeys:                []server.CacheKey{},
+		secondLevelCacheLockKey: SecondLevelCacheLockKey{lockKeys: map[string][]server.CacheKey{}},
+		lastLevelCacheLockKey:   LastLevelCacheLockKey{withoutTagLockKeys: []server.CacheKey{}, withTagLockKeys: map[string][]server.CacheKey{}},
 	}, nil
 }
 
@@ -272,6 +303,12 @@ func (tx *Tx) CreateWithTagAndExpiration(tag, key string, value Type, expiration
 	if tx.isCommitted {
 		return ErrAlreadyCommittedTransaction
 	}
+	if c, exists := tx.r.lastLevelCaches.get(tag); exists {
+		if err := c.Create(tx, tag, key, value, expiration); err != nil {
+			return xerrors.Errorf("failed to Create: %w", err)
+		}
+		return nil
+	}
 	if err := tx.r.lastLevelCache.Create(tx, tag, key, value, expiration); err != nil {
 		return xerrors.Errorf("failed to Create: %w", err)
 	}
@@ -288,6 +325,11 @@ func (tx *Tx) Find(key string, value Type) error {
 func (tx *Tx) FindWithTag(tag, key string, value Type) error {
 	if tx.isCommitted {
 		return ErrAlreadyCommittedTransaction
+	}
+	if c, exists := tx.r.lastLevelCaches.get(tag); exists {
+		if err := c.Find(tx, tag, key, value); err != nil {
+			return xerrors.Errorf("failed to Find: %w", err)
+		}
 	}
 	if err := tx.r.lastLevelCache.Find(tx, tag, key, value); err != nil {
 		return xerrors.Errorf("failed to Find: %w", err)
@@ -418,11 +460,11 @@ func (tx *Tx) FindByQueryBuilderContext(ctx context.Context, builder *QueryBuild
 }
 
 func (tx *Tx) CountByQueryBuilder(builder *QueryBuilder) (uint64, error) {
-	 count, err := tx.CountByQueryBuilderContext(context.Background(), builder)
-	 if err != nil {
-	 	return 0, xerrors.Errorf("failed to CountByQueryBuilderContext: %w", err)
-	 }
-	 return count, nil
+	count, err := tx.CountByQueryBuilderContext(context.Background(), builder)
+	if err != nil {
+		return 0, xerrors.Errorf("failed to CountByQueryBuilderContext: %w", err)
+	}
+	return count, nil
 }
 
 func (tx *Tx) CountByQueryBuilderContext(ctx context.Context, builder *QueryBuilder) (uint64, error) {
@@ -534,10 +576,29 @@ func (tx *Tx) sortedPendingQueryKeys() []string {
 
 func (tx *Tx) unlockAllKeys() error {
 	mergedErr := []string{}
-	for _, key := range tx.lockKeys {
-		log.Delete(tx.id, SLCServer, key)
-		if err := tx.r.cacheServer.Delete(key); err != nil {
+	for tableName, lockKeys := range tx.secondLevelCacheLockKey.lockKeys {
+		for _, lockKey := range lockKeys {
+			if c, exists := tx.r.secondLevelCaches.get(tableName); exists {
+				if err := c.cacheServer.Delete(lockKey); err != nil {
+					mergedErr = append(mergedErr, err.Error())
+				}
+			} else {
+				mergedErr = append(mergedErr, fmt.Sprintf("unknown table name %s", tableName))
+			}
+		}
+	}
+	for _, lockKey := range tx.lastLevelCacheLockKey.withoutTagLockKeys {
+		if err := tx.r.lastLevelCache.cacheServer.Delete(lockKey); err != nil {
 			mergedErr = append(mergedErr, err.Error())
+		}
+	}
+	for tag, lockKeys := range tx.lastLevelCacheLockKey.withTagLockKeys {
+		for _, lockKey := range lockKeys {
+			if c, exists := tx.r.lastLevelCaches.get(tag); exists {
+				if err := c.cacheServer.Delete(lockKey); err != nil {
+					mergedErr = append(mergedErr, err.Error())
+				}
+			}
 		}
 	}
 	if len(mergedErr) > 0 {
@@ -821,7 +882,28 @@ func (r *Rapidash) tableOption(tableName string) TableOption {
 }
 
 func (r *Rapidash) WarmUpSecondLevelCache(conn *sql.DB, typ *Struct) error {
-	slc := NewSecondLevelCache(typ, r.cacheServer, r.tableOption(typ.tableName))
+	var cacheServer server.CacheServer
+	if tableOption, exists := r.opt.slcTableOpt[typ.tableName]; exists {
+		selectors := &Selectors{}
+		if err := selectors.setSelector([]string{}, []string{tableOption.ServerAddr()}, []string{}); err != nil {
+			return xerrors.Errorf("failed to set cache server selector: %w", err)
+		}
+		switch tableOption.ServerType() {
+		case CacheServerTypeMemcached:
+			cacheServer = server.NewMemcachedBySelectors(selectors.slcSelector, nil)
+		case CacheServerTypeRedis:
+			cacheServer = server.NewRedisBySelectors(selectors.slcSelector, nil)
+		}
+		if err := cacheServer.SetTimeout(r.opt.timeout); err != nil {
+			return xerrors.Errorf("failed to set timeout for cache server: %w", err)
+		}
+		if err := cacheServer.SetMaxIdleConnections(r.opt.maxIdleConnections); err != nil {
+			return xerrors.Errorf("failed to set max idle connections for cache server: %w", err)
+		}
+	} else {
+		cacheServer = r.cacheServer
+	}
+	slc := NewSecondLevelCache(typ, cacheServer, r.tableOption(typ.tableName))
 	if err := slc.WarmUp(conn); err != nil {
 		return xerrors.Errorf("cannot warm up SecondLevelCache. table is %s: %w", typ.tableName, err)
 	}
@@ -884,37 +966,93 @@ func (r *Rapidash) AddLastLevelCacheServer(servers ...string) error {
 }
 
 func (r *Rapidash) Flush() error {
-	if err := r.cacheServer.Flush(); err != nil {
-		return xerrors.Errorf("failed to flush cache server: %w", err)
+	for _, key := range r.secondLevelCaches.keys() {
+		if c, exists := r.secondLevelCaches.get(key); exists {
+			if err := c.cacheServer.Flush(); err != nil {
+				return xerrors.Errorf("failed to flush second level cache server: %w", err)
+			}
+		}
 	}
+	for _, key := range r.lastLevelCaches.keys() {
+		if c, exists := r.lastLevelCaches.get(key); exists {
+			if err := c.cacheServer.Flush(); err != nil {
+				return xerrors.Errorf("failed to flush last level cache server: %w", err)
+			}
+		}
+	}
+	r.lastLevelCache.cacheServer.Flush()
 	return nil
 }
 
 func (r *Rapidash) setServer() error {
-	switch r.opt.serverType {
+	s := &Selectors{}
+	if err := s.setSelector(r.opt.servers.addrs, []string{}, []string{}); err != nil {
+		return xerrors.Errorf("failed to set cache server selector: %w", err)
+	}
+	switch r.opt.servers.typ {
 	case CacheServerTypeMemcached:
-		s := &Selectors{}
-		if err := s.setSelector(r.opt.serverAddrs, r.opt.slcServerAddrs, r.opt.llcServerAddrs); err != nil {
-			return xerrors.Errorf("failed to set cache server selector: %w", err)
-		}
-		memcached := server.NewMemcachedBySelectors(s.slcSelector, s.llcSelector)
-		r.cacheServer = memcached
+		r.cacheServer = server.NewMemcachedBySelectors(s.slcSelector, s.llcSelector)
 		r.lastLevelCache = NewLastLevelCache(r.cacheServer, r.opt.llcOpt)
 	case CacheServerTypeRedis:
-		s := &Selectors{}
-		if err := s.setSelector(r.opt.serverAddrs, r.opt.slcServerAddrs, r.opt.llcServerAddrs); err != nil {
-			return xerrors.Errorf("failed to set cache server selector: %w", err)
-		}
-		redis := server.NewRedisBySelectors(s.slcSelector, s.llcSelector)
-		r.cacheServer = redis
+		r.cacheServer = server.NewRedisBySelectors(s.slcSelector, s.llcSelector)
 		r.lastLevelCache = NewLastLevelCache(r.cacheServer, r.opt.llcOpt)
 	case CacheServerTypeOnMemory:
+	}
+	if r.opt.slcServer != nil {
+		switch r.opt.slcServer.typ {
+		case CacheServerTypeMemcached:
+			r.cacheServer = server.NewMemcachedBySelectors(s.slcSelector, nil)
+		case CacheServerTypeRedis:
+			r.cacheServer = server.NewRedisBySelectors(s.slcSelector, nil)
+		case CacheServerTypeOnMemory:
+		}
 	}
 	if err := r.cacheServer.SetTimeout(r.opt.timeout); err != nil {
 		return xerrors.Errorf("failed to set timeout for cache server: %w", err)
 	}
 	if err := r.cacheServer.SetMaxIdleConnections(r.opt.maxIdleConnections); err != nil {
 		return xerrors.Errorf("failed to set max idle connections for cache server: %w", err)
+	}
+	if r.opt.llcServer != nil {
+		switch r.opt.llcServer.typ {
+		case CacheServerTypeMemcached:
+			r.lastLevelCache = NewLastLevelCache(server.NewMemcachedBySelectors(nil, s.llcSelector), r.opt.llcOpt)
+		case CacheServerTypeRedis:
+			r.lastLevelCache = NewLastLevelCache(server.NewRedisBySelectors(nil, s.llcSelector), r.opt.llcOpt)
+		case CacheServerTypeOnMemory:
+		}
+		if err := r.lastLevelCache.cacheServer.SetTimeout(r.opt.timeout); err != nil {
+			return xerrors.Errorf("failed to set timeout for cache server: %w", err)
+		}
+		if err := r.lastLevelCache.cacheServer.SetMaxIdleConnections(r.opt.maxIdleConnections); err != nil {
+			return xerrors.Errorf("failed to set max idle connections for cache server: %w", err)
+		}
+	}
+	if r.opt.llcOpt.tagOpt != nil && len(r.opt.llcOpt.tagOpt) > 0 {
+		for tagName, tagOption := range r.opt.llcOpt.tagOpt {
+			llcSelectors := &Selectors{}
+			if err := llcSelectors.setSelector([]string{}, []string{}, []string{tagOption.server.addr}); err != nil {
+				return xerrors.Errorf("failed to set cache server selector: %w", err)
+			}
+			var cacheServer server.CacheServer
+			switch tagOption.server.typ {
+			case CacheServerTypeMemcached:
+				cacheServer = server.NewMemcachedBySelectors(nil, llcSelectors.llcSelector)
+			case CacheServerTypeRedis:
+				cacheServer = server.NewRedisBySelectors(nil, llcSelectors.llcSelector)
+			case CacheServerTypeOnMemory:
+			}
+			if err := cacheServer.SetTimeout(r.opt.timeout); err != nil {
+				return xerrors.Errorf("failed to set timeout for cache server: %w", err)
+			}
+			if err := cacheServer.SetMaxIdleConnections(r.opt.maxIdleConnections); err != nil {
+				return xerrors.Errorf("failed to set max idle connections for cache server: %w", err)
+			}
+			lastLevelCheServer := NewLastLevelCache(cacheServer, r.opt.llcOpt)
+			lastLevelCheServer.opt.expiration = tagOption.expiration
+			lastLevelCheServer.opt.lockExpiration = tagOption.lockExpiration
+			r.lastLevelCaches.set(tagName, lastLevelCheServer)
+		}
 	}
 	return nil
 }
@@ -968,6 +1106,7 @@ func New(opts ...OptionFunc) (*Rapidash, error) {
 		ignoreCaches:      map[string]struct{}{},
 		firstLevelCaches:  NewFirstLevelCacheMap(),
 		secondLevelCaches: NewSecondLevelCacheMap(),
+		lastLevelCaches:   NewLastLevelCacheMap(),
 		opt:               defaultOption(),
 	}
 	for _, opt := range opts {

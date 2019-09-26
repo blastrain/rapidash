@@ -6,27 +6,30 @@ import (
 
 type OptionFunc func(*Rapidash)
 
-func ServerType(typ CacheServerType) OptionFunc {
+func Servers(servers ServersConfig) OptionFunc {
 	return func(r *Rapidash) {
-		r.opt.serverType = typ
+		r.opt.servers = &ServersOption{
+			typ:   servers.Type,
+			addrs: servers.Addrs,
+		}
 	}
 }
 
-func ServerAddrs(addrs []string) OptionFunc {
+func SecondLevelCacheServers(servers ServersConfig) OptionFunc {
 	return func(r *Rapidash) {
-		r.opt.serverAddrs = addrs
+		r.opt.slcServer = &ServersOption{
+			typ:   servers.Type,
+			addrs: servers.Addrs,
+		}
 	}
 }
 
-func SecondLevelCacheServerAddrs(addrs []string) OptionFunc {
+func LastLevelCacheServer(servers ServersConfig) OptionFunc {
 	return func(r *Rapidash) {
-		r.opt.slcServerAddrs = addrs
-	}
-}
-
-func LastLevelCacheServerAddrs(addrs []string) OptionFunc {
-	return func(r *Rapidash) {
-		r.opt.llcServerAddrs = addrs
+		r.opt.llcServer = &ServersOption{
+			typ:   servers.Type,
+			addrs: servers.Addrs,
+		}
 	}
 }
 
@@ -104,10 +107,13 @@ func SecondLevelCacheTableShardKey(table string, shardKey string) OptionFunc {
 	}
 }
 
-func SecondLevelCacheTableServerAddr(table string, serverAddr string) OptionFunc {
+func SecondLevelCacheTableServer(table string, server ServerConfig) OptionFunc {
 	return func(r *Rapidash) {
 		opt := r.opt.slcTableOpt[table]
-		opt.server = &serverAddr
+		opt.server = &ServerOption{
+			typ:  server.Type,
+			addr: server.Addr,
+		}
 		r.opt.slcTableOpt[table] = opt
 	}
 }
@@ -168,10 +174,13 @@ func LastLevelCachePessimisticLock(enabled bool) OptionFunc {
 	}
 }
 
-func LastLevelCacheTagServerAddr(tag string, serverAddr string) OptionFunc {
+func LastLevelCacheTagServer(tag string, server ServerConfig) OptionFunc {
 	return func(r *Rapidash) {
 		opt := r.opt.llcOpt.tagOpt[tag]
-		opt.server = serverAddr
+		opt.server = ServerOption{
+			typ:  server.Type,
+			addr: server.Addr,
+		}
 		r.opt.llcOpt.tagOpt[tag] = opt
 	}
 }
