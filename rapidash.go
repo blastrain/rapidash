@@ -196,13 +196,16 @@ type PendingQuery struct {
 }
 
 type Tx struct {
-	r              *Rapidash
-	conn           Connection
-	stash          *Stash
-	id             string
-	pendingQueries map[string]*PendingQuery
-	lockKeys       []server.CacheKey
-	isCommitted    bool
+	r                          *Rapidash
+	conn                       Connection
+	stash                      *Stash
+	id                         string
+	pendingQueries             map[string]*PendingQuery
+	lockKeys                   []server.CacheKey
+	isCommitted                bool
+	beforeCommitCallback       func([]*QueryLog) error
+	afterCommitSuccessCallback func() error
+	afterCommitFailureCallback func([]*QueryLog) error
 }
 
 type Stash struct {
@@ -221,7 +224,7 @@ func NewStash() *Stash {
 		keyToPrimaryKeys:         map[string][]server.CacheKey{},
 		primaryKeyToValue:        map[string]*StructValue{},
 		lastLevelCacheKeyToBytes: map[string][]byte{},
-		casIDs:                   map[string]uint64{},
+		casIDs: map[string]uint64{},
 	}
 }
 
@@ -245,6 +248,17 @@ func (r *Rapidash) Begin(conns ...Connection) (*Tx, error) {
 
 func (tx *Tx) ID() string {
 	return tx.id
+}
+
+func (tx *Tx) BeforeCommitCallback(callback func([]*QueryLog) error) {
+	tx.beforeCommitCallback = callback
+}
+
+func (tx *Tx) AfterCommitCallback(
+	successCallback func() error,
+	failureCallback func([]*QueryLog) error) {
+	tx.afterCommitSuccessCallback = successCallback
+	tx.afterCommitFailureCallback = failureCallback
 }
 
 func (tx *Tx) Create(key string, value Type) error {
@@ -418,11 +432,11 @@ func (tx *Tx) FindByQueryBuilderContext(ctx context.Context, builder *QueryBuild
 }
 
 func (tx *Tx) CountByQueryBuilder(builder *QueryBuilder) (uint64, error) {
-	 count, err := tx.CountByQueryBuilderContext(context.Background(), builder)
-	 if err != nil {
-	 	return 0, xerrors.Errorf("failed to CountByQueryBuilderContext: %w", err)
-	 }
-	 return count, nil
+	count, err := tx.CountByQueryBuilderContext(context.Background(), builder)
+	if err != nil {
+		return 0, xerrors.Errorf("failed to CountByQueryBuilderContext: %w", err)
+	}
+	return count, nil
 }
 
 func (tx *Tx) CountByQueryBuilderContext(ctx context.Context, builder *QueryBuilder) (uint64, error) {
@@ -553,6 +567,27 @@ func (tx *Tx) releaseValues() {
 	tx.stash.primaryKeyToValue = make(map[string]*StructValue)
 }
 
+func (tx *Tx) commitBeforeProcess(queries []*PendingQuery) error {
+	if tx.beforeCommitCallback != nil {
+		totalQueries := make([]*QueryLog, len(queries))
+		for idx, query := range queries {
+			totalQueries[idx] = query.QueryLog
+		}
+		if err := tx.beforeCommitCallback(totalQueries); err != nil {
+			return xerrors.Errorf("failed to callback for BeforeCommit: %w", err)
+		}
+	} else if tx.r.opt.beforeCommitCallback != nil {
+		totalQueries := make([]*QueryLog, len(queries))
+		for idx, query := range queries {
+			totalQueries[idx] = query.QueryLog
+		}
+		if err := tx.r.opt.beforeCommitCallback(tx, totalQueries); err != nil {
+			return xerrors.Errorf("failed to callback for BeforeCommit: %w", err)
+		}
+	}
+	return nil
+}
+
 func (tx *Tx) commitAfterProcess(queries []*PendingQuery) error {
 	tx.isCommitted = true
 	errs := []string{}
@@ -560,13 +595,26 @@ func (tx *Tx) commitAfterProcess(queries []*PendingQuery) error {
 		errs = append(errs, err.Error())
 	}
 	if len(queries) == 0 {
+		if tx.afterCommitSuccessCallback != nil {
+			if err := tx.afterCommitSuccessCallback(); err != nil {
+				errs = append(errs, err.Error())
+			}
+		}
 		if tx.r.opt.afterCommitSuccessCallback != nil {
 			if err := tx.r.opt.afterCommitSuccessCallback(tx); err != nil {
 				errs = append(errs, err.Error())
 			}
 		}
 	} else {
-		if tx.r.opt.afterCommitFailureCallback != nil {
+		if tx.afterCommitFailureCallback != nil {
+			failureQueries := []*QueryLog{}
+			for _, query := range queries {
+				failureQueries = append(failureQueries, query.QueryLog)
+			}
+			if err := tx.afterCommitFailureCallback(failureQueries); err != nil {
+				errs = append(errs, err.Error())
+			}
+		} else if tx.r.opt.afterCommitFailureCallback != nil {
 			failureQueries := []*QueryLog{}
 			for _, query := range queries {
 				failureQueries = append(failureQueries, query.QueryLog)
@@ -586,20 +634,16 @@ func (tx *Tx) commitCache() (e error) {
 	queries := []*PendingQuery{}
 	tx.releaseValues()
 	defer func() {
-		e = tx.commitAfterProcess(queries)
+		if err := tx.commitAfterProcess(queries); err != nil {
+			e = xerrors.Errorf("failed to run commit after process: %w", err)
+		}
 	}()
 	keys := tx.sortedPendingQueryKeys()
 	for _, key := range keys {
 		queries = append(queries, tx.pendingQueries[key])
 	}
-	if tx.r.opt.beforeCommitCallback != nil {
-		totalQueries := make([]*QueryLog, len(queries))
-		for idx, query := range queries {
-			totalQueries[idx] = query.QueryLog
-		}
-		if err := tx.r.opt.beforeCommitCallback(tx, totalQueries); err != nil {
-			return xerrors.Errorf("failed to callback for BeforeCommit: %w", err)
-		}
+	if err := tx.commitBeforeProcess(queries); err != nil {
+		return xerrors.Errorf("failed to run commit before process: %w", err)
 	}
 	for i := 0; i < tx.r.opt.maxRetryCount-1; i++ {
 		queries = tx.execQuery(queries)
