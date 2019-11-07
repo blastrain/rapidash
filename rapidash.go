@@ -599,8 +599,7 @@ func (tx *Tx) commitAfterProcess(queries []*PendingQuery) error {
 			if err := tx.afterCommitSuccessCallback(); err != nil {
 				errs = append(errs, err.Error())
 			}
-		}
-		if tx.r.opt.afterCommitSuccessCallback != nil {
+		} else if tx.r.opt.afterCommitSuccessCallback != nil {
 			if err := tx.r.opt.afterCommitSuccessCallback(tx); err != nil {
 				errs = append(errs, err.Error())
 			}
