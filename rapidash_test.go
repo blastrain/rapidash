@@ -184,6 +184,32 @@ func TestCommit(t *testing.T) {
 	Error(t, tx.CommitDBOnly())
 }
 
+func TestCommitCallback(t *testing.T) {
+	txConn, err := conn.Begin()
+	NoError(t, err)
+	tx, err := cache.Begin(txConn)
+	NoError(t, err)
+
+	var i, j int
+	tx.BeforeCommitCallback(func(queries []*QueryLog) error {
+		i = 10
+		j = 10
+		return nil
+	})
+	tx.AfterCommitCallback(func() error {
+		j = 20
+		return nil
+	}, func(logs []*QueryLog) error {
+		return nil
+	})
+
+	Equal(t, i, 0)
+	NoError(t, tx.CommitDBOnly())
+	NoError(t, tx.CommitCacheOnly())
+	Equal(t, i, 10)
+	Equal(t, j, 20)
+}
+
 func TestRollback(t *testing.T) {
 	txConn, err := conn.Begin()
 	NoError(t, err)
