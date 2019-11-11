@@ -82,9 +82,11 @@ func (c *LastLevelCache) Create(tx *Tx, tag, key string, value Type, expiration 
 	}
 	keyStr := cacheKey.String()
 	tx.stash.lastLevelCacheKeyToBytes[keyStr] = content
-	if _, exists := tx.pendingQueries[keyStr]; !exists {
-		if err := c.lockKey(tx, cacheKey, expiration); err != nil {
-			return xerrors.Errorf("failed to lock key: %w", err)
+	if c.opt.pessimisticLock {
+		if _, exists := tx.pendingQueries[keyStr]; !exists {
+			if err := c.lockKey(tx, cacheKey, expiration); err != nil {
+				return xerrors.Errorf("failed to lock key: %w", err)
+			}
 		}
 	}
 	var addrStr string
@@ -139,9 +141,11 @@ func (c *LastLevelCache) Update(tx *Tx, tag, key string, value Type, expiration 
 		return xerrors.Errorf("failed to get cacheKey: %w", err)
 	}
 	keyStr := cacheKey.String()
-	if _, exists := tx.pendingQueries[keyStr]; !exists {
-		if err := c.lockKey(tx, cacheKey, expiration); err != nil {
-			return xerrors.Errorf("failed to lock key: %w", err)
+	if c.opt.pessimisticLock {
+		if _, exists := tx.pendingQueries[keyStr]; !exists {
+			if err := c.lockKey(tx, cacheKey, expiration); err != nil {
+				return xerrors.Errorf("failed to lock key: %w", err)
+			}
 		}
 	}
 	var addrStr string
