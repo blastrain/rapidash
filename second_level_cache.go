@@ -377,9 +377,15 @@ func (c *SecondLevelCache) update(tx *Tx, key server.CacheKey, value []byte, log
 		},
 		fn: func() error {
 			log.Update(tx.id, SLCServer, key, logenc)
+			casID := uint64(0)
+			if c.opt.OptimisticLock() {
+				casID = tx.stash.casIDs[key.String()]
+			}
 			if err := c.cacheServer.Set(&server.CacheStoreRequest{
 				Key:   key,
 				Value: value,
+				Expiration: c.opt.Expiration(),
+				CasID: casID,
 			}); err != nil {
 				return xerrors.Errorf("failed to update cache: %w", err)
 			}

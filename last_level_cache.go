@@ -82,9 +82,11 @@ func (c *LastLevelCache) Create(tx *Tx, tag, key string, value Type, expiration 
 	}
 	keyStr := cacheKey.String()
 	tx.stash.lastLevelCacheKeyToBytes[keyStr] = content
-	if _, exists := tx.pendingQueries[keyStr]; !exists {
-		if err := c.lockKey(tx, cacheKey, expiration); err != nil {
-			return xerrors.Errorf("failed to lock key: %w", err)
+	if c.opt.pessimisticLock {
+		if _, exists := tx.pendingQueries[keyStr]; !exists {
+			if err := c.lockKey(tx, cacheKey, c.opt.lockExpiration); err != nil {
+				return xerrors.Errorf("failed to lock key: %w", err)
+			}
 		}
 	}
 	var addrStr string
@@ -123,6 +125,7 @@ func (c *LastLevelCache) Find(tx *Tx, tag, key string, value Type) error {
 	if err != nil {
 		return xerrors.Errorf("failed to get cache from server: %w", err)
 	}
+	tx.stash.casIDs[cacheKey.String()] = content.CasID
 	if err := value.Decode(content.Value); err != nil {
 		return xerrors.Errorf("failed to decode value: %w", err)
 	}
@@ -139,9 +142,11 @@ func (c *LastLevelCache) Update(tx *Tx, tag, key string, value Type, expiration 
 		return xerrors.Errorf("failed to get cacheKey: %w", err)
 	}
 	keyStr := cacheKey.String()
-	if _, exists := tx.pendingQueries[keyStr]; !exists {
-		if err := c.lockKey(tx, cacheKey, expiration); err != nil {
-			return xerrors.Errorf("failed to lock key: %w", err)
+	if c.opt.pessimisticLock {
+		if _, exists := tx.pendingQueries[keyStr]; !exists {
+			if err := c.lockKey(tx, cacheKey, c.opt.lockExpiration); err != nil {
+				return xerrors.Errorf("failed to lock key: %w", err)
+			}
 		}
 	}
 	var addrStr string
@@ -157,9 +162,15 @@ func (c *LastLevelCache) Update(tx *Tx, tag, key string, value Type, expiration 
 			Addr: addrStr,
 		},
 		fn: func() error {
+			casID := uint64(0)
+			if c.opt.optimisticLock {
+				casID = tx.stash.casIDs[keyStr]
+			}
 			if err := c.cacheServer.Set(&server.CacheStoreRequest{
 				Key:   cacheKey,
 				Value: content,
+				Expiration: expiration,
+				CasID: casID,
 			}); err != nil {
 				return xerrors.Errorf("failed to set cache to server: %w", err)
 			}
