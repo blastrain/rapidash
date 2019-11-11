@@ -125,6 +125,7 @@ func (c *LastLevelCache) Find(tx *Tx, tag, key string, value Type) error {
 	if err != nil {
 		return xerrors.Errorf("failed to get cache from server: %w", err)
 	}
+	tx.stash.casIDs[cacheKey.String()] = content.CasID
 	if err := value.Decode(content.Value); err != nil {
 		return xerrors.Errorf("failed to decode value: %w", err)
 	}
@@ -161,9 +162,15 @@ func (c *LastLevelCache) Update(tx *Tx, tag, key string, value Type, expiration 
 			Addr: addrStr,
 		},
 		fn: func() error {
+			casID := uint64(0)
+			if c.opt.optimisticLock {
+				casID = tx.stash.casIDs[keyStr]
+			}
 			if err := c.cacheServer.Set(&server.CacheStoreRequest{
 				Key:   cacheKey,
 				Value: content,
+				Expiration: expiration,
+				CasID: casID,
 			}); err != nil {
 				return xerrors.Errorf("failed to set cache to server: %w", err)
 			}
