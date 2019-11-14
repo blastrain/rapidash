@@ -202,7 +202,8 @@ type Tx struct {
 	id                         string
 	pendingQueries             map[string]*PendingQuery
 	lockKeys                   []server.CacheKey
-	isCommitted                bool
+	isDBCommitted              bool
+	isCacheCommitted           bool
 	beforeCommitCallback       func([]*QueryLog) error
 	afterCommitSuccessCallback func() error
 	afterCommitFailureCallback func([]*QueryLog) error
@@ -283,7 +284,7 @@ func (tx *Tx) CreateWithExpiration(key string, value Type, expiration time.Durat
 }
 
 func (tx *Tx) CreateWithTagAndExpiration(tag, key string, value Type, expiration time.Duration) error {
-	if tx.isCommitted {
+	if tx.IsCommitted() {
 		return ErrAlreadyCommittedTransaction
 	}
 	if err := tx.r.lastLevelCache.Create(tx, tag, key, value, expiration); err != nil {
@@ -300,7 +301,7 @@ func (tx *Tx) Find(key string, value Type) error {
 }
 
 func (tx *Tx) FindWithTag(tag, key string, value Type) error {
-	if tx.isCommitted {
+	if tx.IsCommitted() {
 		return ErrAlreadyCommittedTransaction
 	}
 	if err := tx.r.lastLevelCache.Find(tx, tag, key, value); err != nil {
@@ -331,7 +332,7 @@ func (tx *Tx) UpdateWithExpiration(key string, value Type, expiration time.Durat
 }
 
 func (tx *Tx) UpdateWithTagAndExpiration(tag, key string, value Type, expiration time.Duration) error {
-	if tx.isCommitted {
+	if tx.IsCommitted() {
 		return ErrAlreadyCommittedTransaction
 	}
 	if err := tx.r.lastLevelCache.Update(tx, tag, key, value, expiration); err != nil {
@@ -348,7 +349,7 @@ func (tx *Tx) Delete(key string) error {
 }
 
 func (tx *Tx) DeleteWithTag(tag, key string) error {
-	if tx.isCommitted {
+	if tx.IsCommitted() {
 		return ErrAlreadyCommittedTransaction
 	}
 	if err := tx.r.lastLevelCache.Delete(tx, tag, key); err != nil {
@@ -372,7 +373,7 @@ func (tx *Tx) CreateByTable(tableName string, marshaler Marshaler) (int64, error
 }
 
 func (tx *Tx) CreateByTableContext(ctx context.Context, tableName string, marshaler Marshaler) (id int64, e error) {
-	if tx.isCommitted {
+	if tx.IsCommitted() {
 		e = ErrAlreadyCommittedTransaction
 		return
 	}
@@ -409,7 +410,7 @@ func (tx *Tx) FindByQueryBuilder(builder *QueryBuilder, unmarshaler Unmarshaler)
 }
 
 func (tx *Tx) FindByQueryBuilderContext(ctx context.Context, builder *QueryBuilder, unmarshaler Unmarshaler) error {
-	if tx.isCommitted {
+	if tx.IsCommitted() {
 		return ErrAlreadyCommittedTransaction
 	}
 	tx.enabledIgnoreCacheIfExistsTable(builder)
@@ -475,7 +476,7 @@ func (tx *Tx) UpdateByQueryBuilder(builder *QueryBuilder, updateMap map[string]i
 }
 
 func (tx *Tx) UpdateByQueryBuilderContext(ctx context.Context, builder *QueryBuilder, updateMap map[string]interface{}) error {
-	if tx.isCommitted {
+	if tx.IsCommitted() {
 		return ErrAlreadyCommittedTransaction
 	}
 	tx.enabledIgnoreCacheIfExistsTable(builder)
@@ -502,7 +503,7 @@ func (tx *Tx) DeleteByQueryBuilder(builder *QueryBuilder) error {
 }
 
 func (tx *Tx) DeleteByQueryBuilderContext(ctx context.Context, builder *QueryBuilder) error {
-	if tx.isCommitted {
+	if tx.IsCommitted() {
 		return ErrAlreadyCommittedTransaction
 	}
 	tx.enabledIgnoreCacheIfExistsTable(builder)
@@ -522,7 +523,7 @@ func (tx *Tx) DeleteByQueryBuilderContext(ctx context.Context, builder *QueryBui
 }
 
 func (tx *Tx) IsCommitted() bool {
-	return tx.isCommitted
+	return tx.isDBCommitted || tx.isCacheCommitted
 }
 
 func (tx *Tx) execQuery(queries []*PendingQuery) []*PendingQuery {
@@ -589,7 +590,7 @@ func (tx *Tx) commitBeforeProcess(queries []*PendingQuery) error {
 }
 
 func (tx *Tx) commitAfterProcess(queries []*PendingQuery) error {
-	tx.isCommitted = true
+	tx.isCacheCommitted = true
 	errs := []string{}
 	if err := tx.unlockAllKeys(); err != nil {
 		errs = append(errs, err.Error())
@@ -674,6 +675,7 @@ func (tx *Tx) commitDB() error {
 	if err := txConn.Commit(); err != nil {
 		return xerrors.Errorf("failed to Commit for database: %w", err)
 	}
+	tx.isDBCommitted = true
 	return nil
 }
 
@@ -748,7 +750,7 @@ func (tx *Tx) Rollback() error {
 }
 
 func (tx *Tx) RollbackCacheOnlyUnlessCommitted() error {
-	if !tx.isCommitted {
+	if !tx.isCacheCommitted {
 		if err := tx.rollbackCache(); err != nil {
 			return xerrors.Errorf("failed to rollback: %w", err)
 		}
@@ -758,7 +760,7 @@ func (tx *Tx) RollbackCacheOnlyUnlessCommitted() error {
 }
 
 func (tx *Tx) RollbackDBOnlyUnlessCommitted() error {
-	if !tx.isCommitted {
+	if !tx.isDBCommitted {
 		if err := tx.rollbackDB(); err != nil {
 			return xerrors.Errorf("failed to rollback: %w", err)
 		}
@@ -768,7 +770,7 @@ func (tx *Tx) RollbackDBOnlyUnlessCommitted() error {
 }
 
 func (tx *Tx) RollbackUnlessCommitted() error {
-	if !tx.isCommitted {
+	if !tx.IsCommitted() {
 		if err := tx.Rollback(); err != nil {
 			return xerrors.Errorf("failed to rollback: %w", err)
 		}

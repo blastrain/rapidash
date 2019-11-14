@@ -179,9 +179,26 @@ func TestCommit(t *testing.T) {
 	NoError(t, err)
 	tx, err := cache.Begin(txConn)
 	NoError(t, err)
+
+	Equal(t, tx.isDBCommitted, false)
+	Equal(t, tx.isCacheCommitted, false)
+	Equal(t, tx.IsCommitted(), false)
+
 	NoError(t, tx.CommitDBOnly())
+
+	Equal(t, tx.isDBCommitted, true)
+	Equal(t, tx.isCacheCommitted, false)
+	Equal(t, tx.IsCommitted(), true)
+
 	NoError(t, tx.CommitCacheOnly())
+
+	Equal(t, tx.isDBCommitted, true)
+	Equal(t, tx.isCacheCommitted, true)
+	Equal(t, tx.IsCommitted(), true)
+
 	Error(t, tx.CommitDBOnly())
+	Error(t, tx.RollbackDBOnly())
+	NoError(t, tx.RollbackDBOnlyUnlessCommitted())
 }
 
 func TestCommitCallback(t *testing.T) {
