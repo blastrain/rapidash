@@ -770,11 +770,11 @@ func (tx *Tx) RollbackDBOnlyUnlessCommitted() error {
 }
 
 func (tx *Tx) RollbackUnlessCommitted() error {
-	if !tx.IsCommitted() {
-		if err := tx.Rollback(); err != nil {
-			return xerrors.Errorf("failed to rollback: %w", err)
-		}
-		return nil
+	if err := tx.RollbackDBOnlyUnlessCommitted(); err != nil {
+		return xerrors.Errorf("failed to rollback: %w", err)
+	}
+	if err := tx.RollbackCacheOnlyUnlessCommitted(); err != nil {
+		return xerrors.Errorf("failed to rollback: %w", err)
 	}
 	return nil
 }
