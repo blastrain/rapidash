@@ -12,12 +12,10 @@ require (
 	github.com/juju/testing v0.0.0-20190418112600-6570bd8f8541 // indirect
 	github.com/knocknote/vitess-sqlparser v0.0.0-20181121014348-1003c43917a3
 	github.com/kr/pretty v0.1.0 // indirect
-	github.com/lestrrat-go/bufferpool v0.0.0-20180220091733-e7784e1b3e37 // indirect
-	github.com/lestrrat-go/msgpack v0.0.0-20190709093855-18df203ed245
+	github.com/lestrrat-go/msgpack v0.0.0-20191118094803-f1541f70f50e
 	github.com/rakyll/statik v0.1.6
 	github.com/rs/xid v0.0.0-20180316063648-705291fb2231
 	github.com/rs/zerolog v1.13.0
-	github.com/stretchr/testify v1.3.0 // indirect
 	golang.org/x/crypto v0.0.0-20190621222207-cc06ce4a13d4 // indirect
 	golang.org/x/net v0.0.0-20190620200207-3b0461eec859 // indirect
 	golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7
