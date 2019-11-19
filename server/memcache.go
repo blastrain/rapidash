@@ -100,7 +100,7 @@ func (c *MemcachedClient) Set(req *CacheStoreRequest) error {
 		Flags:      req.Key.Hash(),
 		Value:      req.Value,
 		casid:      req.CasID,
-		Expiration: int32(req.Expiration),
+		Expiration: int32(req.Expiration / time.Second),
 	}
 	if req.CasID != 0 {
 		if err := c.CompareAndSwap(item); err != nil {
@@ -119,7 +119,7 @@ func (c *MemcachedClient) Add(key CacheKey, value []byte, expiration time.Durati
 		&Item{
 			Key:        key,
 			Value:      value,
-			Expiration: int32(expiration),
+			Expiration: int32(expiration / time.Second),
 		},
 		(*MemcachedClient).add,
 	); err != nil {
