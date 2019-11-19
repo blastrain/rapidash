@@ -88,7 +88,7 @@ func (c *RedisClient) Set(req *CacheStoreRequest) error {
 		Flags:      req.Key.Hash(),
 		Value:      req.Value,
 		casid:      req.CasID,
-		Expiration: int32(req.Expiration),
+		Expiration: int32(req.Expiration / time.Second),
 	}
 
 	if err := c.onItem(
@@ -106,7 +106,7 @@ func (c *RedisClient) Add(key CacheKey, value []byte, expiration time.Duration) 
 		&Item{
 			Key:        key,
 			Value:      value,
-			Expiration: int32(expiration),
+			Expiration: int32(expiration / time.Second),
 		},
 		(*RedisClient).add,
 	); err != nil {
