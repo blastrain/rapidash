@@ -958,6 +958,184 @@ func testUpdateKeyColumn(t *testing.T, typ CacheServerType) {
 	NoError(t, tx.Commit())
 }
 
+func TestUniqueIndexColumnUpdateByPrimaryKey(t *testing.T) {
+	NoError(t, initUserLoginTable(conn))
+	NoError(t, initCache(conn, CacheServerTypeMemcached))
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	NoError(t, slc.cacheServer.Flush())
+	NoError(t, slc.WarmUp(conn))
+
+	// set unique index cache
+	{
+		txConn, err := conn.Begin()
+		NoError(t, err)
+		tx, err := cache.Begin(txConn)
+		NoError(t, err)
+
+		builder := NewQueryBuilder("user_logins").
+			Eq("user_id", uint64(1)).
+			Eq("user_session_id", uint64(1))
+
+		// create for positive cache
+		var userLogins UserLogins
+		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &userLogins))
+		if len(userLogins) != 1 {
+			t.Fatal("failed to get value by index key")
+		}
+
+		builder = NewQueryBuilder("user_logins").
+			Eq("user_id", uint64(1)).
+			Eq("user_session_id", uint64(2))
+
+		// create for negative cache
+		var newUserLogins UserLogins
+		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &newUserLogins))
+		if len(newUserLogins) != 0 {
+			t.Fatal("failed to get negative cache")
+		}
+		NoError(t, tx.Commit())
+	}
+
+	// update unique index cache by primary key
+	{
+		txConn, err := conn.Begin()
+		NoError(t, err)
+		tx, err := cache.Begin(txConn)
+		NoError(t, err)
+		updateParam := map[string]interface{}{
+			"user_session_id": uint64(2),
+		}
+		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		NoError(t, slc.UpdateByQueryBuilder(context.Background(), tx, builder, updateParam))
+		NoError(t, tx.Commit())
+	}
+
+	// get value by old param
+	{
+		txConn, err := conn.Begin()
+		NoError(t, err)
+		tx, err := cache.Begin(txConn)
+		NoError(t, err)
+		builder := NewQueryBuilder("user_logins").
+			Eq("user_id", uint64(1)).
+			Eq("user_session_id", uint64(1))
+
+		var userLogins UserLogins
+		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &userLogins))
+		if len(userLogins) != 0 {
+			t.Fatal("failed to get to updated value")
+		}
+		NoError(t, tx.Commit())
+	}
+
+	// get value by new param
+	{
+		txConn, err := conn.Begin()
+		NoError(t, err)
+		tx, err := cache.Begin(txConn)
+		NoError(t, err)
+		builder := NewQueryBuilder("user_logins").
+			Eq("user_id", uint64(1)).
+			Eq("user_session_id", uint64(2))
+
+		var userLogins UserLogins
+		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &userLogins))
+		if len(userLogins) != 1 {
+			t.Fatal("failed to get to updated value")
+		}
+		NoError(t, tx.Commit())
+	}
+}
+
+func TestIndexColumnUpdateByPrimaryKey(t *testing.T) {
+	NoError(t, initUserLoginTable(conn))
+	NoError(t, initCache(conn, CacheServerTypeMemcached))
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	NoError(t, slc.cacheServer.Flush())
+	NoError(t, slc.WarmUp(conn))
+
+	// set index cache
+	{
+		txConn, err := conn.Begin()
+		NoError(t, err)
+		tx, err := cache.Begin(txConn)
+		NoError(t, err)
+
+		builder := NewQueryBuilder("user_logins").
+			Eq("user_id", uint64(1)).
+			Eq("login_param_id", uint64(1))
+
+		// create for positive cache
+		var userLogins UserLogins
+		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &userLogins))
+		if len(userLogins) != 1 {
+			t.Fatal("failed to get value by index key")
+		}
+
+		builder = NewQueryBuilder("user_logins").
+			Eq("user_id", uint64(1)).
+			Eq("login_param_id", uint64(2))
+
+		// create for negative cache
+		var newUserLogins UserLogins
+		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &newUserLogins))
+		if len(newUserLogins) != 0 {
+			t.Fatal("failed to get negative cache")
+		}
+		NoError(t, tx.Commit())
+	}
+
+	// update index cache by primary key
+	{
+		txConn, err := conn.Begin()
+		NoError(t, err)
+		tx, err := cache.Begin(txConn)
+		NoError(t, err)
+		updateParam := map[string]interface{}{
+			"login_param_id": uint64(2),
+		}
+		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		NoError(t, slc.UpdateByQueryBuilder(context.Background(), tx, builder, updateParam))
+		NoError(t, tx.Commit())
+	}
+
+	// get value by old param
+	{
+		txConn, err := conn.Begin()
+		NoError(t, err)
+		tx, err := cache.Begin(txConn)
+		NoError(t, err)
+		builder := NewQueryBuilder("user_logins").
+			Eq("user_id", uint64(1)).
+			Eq("login_param_id", uint64(1))
+
+		var userLogins UserLogins
+		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &userLogins))
+		if len(userLogins) != 0 {
+			t.Fatal("failed to get to updated value")
+		}
+		NoError(t, tx.Commit())
+	}
+
+	// get value by new param
+	{
+		txConn, err := conn.Begin()
+		NoError(t, err)
+		tx, err := cache.Begin(txConn)
+		NoError(t, err)
+		builder := NewQueryBuilder("user_logins").
+			Eq("user_id", uint64(1)).
+			Eq("login_param_id", uint64(2))
+
+		var userLogins UserLogins
+		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &userLogins))
+		if len(userLogins) != 1 {
+			t.Fatal("failed to get to updated value")
+		}
+		NoError(t, tx.Commit())
+	}
+}
+
 func TestDeleteByQueryBuilder(t *testing.T) {
 	for cacheServerType := range []CacheServerType{CacheServerTypeMemcached, CacheServerTypeRedis} {
 		testDeleteByQueryBuilder(t, CacheServerType(cacheServerType))

@@ -382,10 +382,10 @@ func (c *SecondLevelCache) update(tx *Tx, key server.CacheKey, value []byte, log
 				casID = tx.stash.casIDs[key.String()]
 			}
 			if err := c.cacheServer.Set(&server.CacheStoreRequest{
-				Key:   key,
-				Value: value,
+				Key:        key,
+				Value:      value,
 				Expiration: c.opt.Expiration(),
-				CasID: casID,
+				CasID:      casID,
 			}); err != nil {
 				return xerrors.Errorf("failed to update cache: %w", err)
 			}
@@ -841,6 +841,58 @@ func (c *SecondLevelCache) FindByQueryBuilder(ctx context.Context, tx *Tx, build
 	return nil
 }
 
+func (c *SecondLevelCache) deleteCacheKeyByOldValue(tx *Tx, column string, value *StructValue) error {
+	for _, index := range c.indexes {
+		if !index.HasColumn(column) {
+			continue
+		}
+
+		cacheKey, err := index.CacheKey(value)
+		if err != nil {
+			return xerrors.Errorf("failed to get cache key: %w", err)
+		}
+		if err := c.deleteUniqueKeyOrOldKey(tx, cacheKey); err != nil {
+			return xerrors.Errorf("failed to delete unique key or old key: %w", err)
+		}
+	}
+	return nil
+}
+
+func (c *SecondLevelCache) updateOrDeleteCacheKeyByNewValue(tx *Tx, column string, value *StructValue) error {
+	for _, index := range c.indexes {
+		if index.Type == IndexTypePrimaryKey {
+			continue
+		}
+		if !index.HasColumn(column) {
+			continue
+		}
+
+		switch index.Type {
+		case IndexTypeUniqueKey:
+			primaryKey, err := c.primaryKey.CacheKey(value)
+			if err != nil {
+				return xerrors.Errorf("failed to get cache key: %w", err)
+			}
+			cacheKey, err := index.CacheKey(value)
+			if err != nil {
+				return xerrors.Errorf("failed to get cache key: %w", err)
+			}
+			if err := c.setUniqueKey(tx, cacheKey, primaryKey); err != nil {
+				return xerrors.Errorf("failed to set unique key: %w", err)
+			}
+		case IndexTypeKey:
+			cacheKey, err := index.CacheKey(value)
+			if err != nil {
+				return xerrors.Errorf("failed to get cache key: %w", err)
+			}
+			if err := c.deleteOldKey(tx, cacheKey); err != nil {
+				return xerrors.Errorf("failed to delete old key: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
 func (c *SecondLevelCache) updateValue(tx *Tx, target *StructValue, updateMap map[string]interface{}) error {
 	for k, v := range updateMap {
 		field, exists := target.fields[k]
@@ -862,20 +914,18 @@ func (c *SecondLevelCache) updateValue(tx *Tx, target *StructValue, updateMap ma
 			target.fields[k] = value
 			continue
 		}
-		for _, index := range c.indexes {
-			if !index.HasColumn(k) {
-				continue
-			}
 
-			cacheKey, err := index.CacheKey(target)
-			if err != nil {
-				return xerrors.Errorf("failed to get cache key: %w", err)
-			}
-			if err := c.deleteUniqueKeyOrOldKey(tx, cacheKey); err != nil {
-				return xerrors.Errorf("failed to delete unique key or old key: %w", err)
-			}
+		// remove cache key by old unique key or old key
+		if err := c.deleteCacheKeyByOldValue(tx, k, target); err != nil {
+			return xerrors.Errorf("failed to delete cache key by value before updating")
 		}
-		target.fields[k] = value
+
+		target.fields[k] = value // update indexed value
+
+		// remove cache key by new key
+		if err := c.updateOrDeleteCacheKeyByNewValue(tx, k, target); err != nil {
+			return xerrors.Errorf("failed to delete cache key by value after updating")
+		}
 	}
 	return nil
 }
