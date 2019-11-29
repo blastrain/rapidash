@@ -42,11 +42,11 @@ type SLCCommandType string
 
 const (
 	SLCCommandGet      SLCCommandType = "get"
-	SLCCommandSet                     = "set"
-	SLCCommandGetMulti                = "get_multi"
-	SLCCommandUpdate                  = "update"
-	SLCCommandDelete                  = "delete"
-	SLCCommandAdd                     = "add"
+	SLCCommandSet      SLCCommandType = "set"
+	SLCCommandGetMulti SLCCommandType = "get_multi"
+	SLCCommandUpdate   SLCCommandType = "update"
+	SLCCommandDelete   SLCCommandType = "delete"
+	SLCCommandAdd      SLCCommandType = "add"
 )
 
 const (

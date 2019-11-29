@@ -277,7 +277,7 @@ func (c *SecondLevelCache) set(tx *Tx, key server.CacheKey, value []byte, logenc
 	}
 	tx.pendingQueries[keyStr] = &PendingQuery{
 		QueryLog: &QueryLog{
-			Command: SLCCommandSet,
+			Command: string(SLCCommandSet),
 			Key:     keyStr,
 			Hash:    key.Hash(),
 			Type:    server.CacheKeyTypeSLC,
@@ -372,7 +372,7 @@ func (c *SecondLevelCache) update(tx *Tx, key server.CacheKey, value []byte, log
 	}
 	tx.pendingQueries[keyStr] = &PendingQuery{
 		QueryLog: &QueryLog{
-			Command: SLCCommandUpdate,
+			Command: string(SLCCommandUpdate),
 			Key:     keyStr,
 			Hash:    key.Hash(),
 			Type:    server.CacheKeyTypeSLC,
@@ -421,7 +421,7 @@ func (c *SecondLevelCache) delete(tx *Tx, key server.CacheKey) error {
 	}
 	tx.pendingQueries[keyStr] = &PendingQuery{
 		QueryLog: &QueryLog{
-			Command: SLCCommandDelete,
+			Command: string(SLCCommandDelete),
 			Key:     keyStr,
 			Hash:    key.Hash(),
 			Type:    server.CacheKeyTypeSLC,
