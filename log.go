@@ -38,15 +38,15 @@ const (
 	SLCDB     SLCType = "db"
 )
 
-type SLCCommandType int
+type SLCCommandType string
 
 const (
-	SLCCommandGet SLCCommandType = iota
-	SLCCommandSet
-	SLCCommandGetMulti
-	SLCCommandUpdate
-	SLCCommandDelete
-	SLCCommandAdd
+	SLCCommandGet      SLCCommandType = "get"
+	SLCCommandSet      SLCCommandType = "set"
+	SLCCommandGetMulti SLCCommandType = "get_multi"
+	SLCCommandUpdate   SLCCommandType = "update"
+	SLCCommandDelete   SLCCommandType = "delete"
+	SLCCommandAdd      SLCCommandType = "add"
 )
 
 const (
