@@ -993,7 +993,7 @@ func TestIndexColumnUpdateByPrimaryKey(t *testing.T) {
 		if len(newUserLogins) != 0 {
 			t.Fatal("failed to get negative cache")
 		}
-		tx.Commit()
+		NoError(t, tx.Commit())
 	}
 
 	// update index cache by primary key
@@ -1001,12 +1001,13 @@ func TestIndexColumnUpdateByPrimaryKey(t *testing.T) {
 		txConn, err := conn.Begin()
 		NoError(t, err)
 		tx, err := cache.Begin(txConn)
+		NoError(t, err)
 		updateParam := map[string]interface{}{
 			"login_param_id": uint64(2),
 		}
 		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
 		NoError(t, slc.UpdateByQueryBuilder(context.Background(), tx, builder, updateParam))
-		tx.Commit()
+		NoError(t, tx.Commit())
 	}
 
 	// get value by old param
@@ -1014,7 +1015,7 @@ func TestIndexColumnUpdateByPrimaryKey(t *testing.T) {
 		txConn, err := conn.Begin()
 		NoError(t, err)
 		tx, err := cache.Begin(txConn)
-
+		NoError(t, err)
 		builder := NewQueryBuilder("user_logins").
 			Eq("user_id", uint64(1)).
 			Eq("login_param_id", uint64(1))
@@ -1024,7 +1025,7 @@ func TestIndexColumnUpdateByPrimaryKey(t *testing.T) {
 		if len(userLogins) != 0 {
 			t.Fatal("failed to get to updated value")
 		}
-		tx.Commit()
+		NoError(t, tx.Commit())
 	}
 
 	// get value by new param
@@ -1032,7 +1033,7 @@ func TestIndexColumnUpdateByPrimaryKey(t *testing.T) {
 		txConn, err := conn.Begin()
 		NoError(t, err)
 		tx, err := cache.Begin(txConn)
-
+		NoError(t, err)
 		builder := NewQueryBuilder("user_logins").
 			Eq("user_id", uint64(1)).
 			Eq("login_param_id", uint64(2))
@@ -1042,7 +1043,7 @@ func TestIndexColumnUpdateByPrimaryKey(t *testing.T) {
 		if len(userLogins) != 1 {
 			t.Fatal("failed to get to updated value")
 		}
-		tx.Commit()
+		NoError(t, tx.Commit())
 	}
 }
 
