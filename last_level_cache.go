@@ -95,10 +95,11 @@ func (c *LastLevelCache) Create(tx *Tx, tag, key string, value Type, expiration 
 	}
 	tx.pendingQueries[keyStr] = &PendingQuery{
 		QueryLog: &QueryLog{
-			Key:  keyStr,
-			Hash: cacheKey.Hash(),
-			Type: server.CacheKeyTypeLLC,
-			Addr: addrStr,
+			Command: "add",
+			Key:     keyStr,
+			Hash:    cacheKey.Hash(),
+			Type:    server.CacheKeyTypeLLC,
+			Addr:    addrStr,
 		},
 		fn: func() error {
 			if err := c.cacheServer.Add(cacheKey, content, expiration); err != nil {
@@ -156,10 +157,11 @@ func (c *LastLevelCache) Update(tx *Tx, tag, key string, value Type, expiration 
 	tx.stash.lastLevelCacheKeyToBytes[keyStr] = content
 	tx.pendingQueries[keyStr] = &PendingQuery{
 		QueryLog: &QueryLog{
-			Key:  keyStr,
-			Hash: cacheKey.Hash(),
-			Type: server.CacheKeyTypeLLC,
-			Addr: addrStr,
+			Command: "set",
+			Key:     keyStr,
+			Hash:    cacheKey.Hash(),
+			Type:    server.CacheKeyTypeLLC,
+			Addr:    addrStr,
 		},
 		fn: func() error {
 			casID := uint64(0)
@@ -167,10 +169,10 @@ func (c *LastLevelCache) Update(tx *Tx, tag, key string, value Type, expiration 
 				casID = tx.stash.casIDs[keyStr]
 			}
 			if err := c.cacheServer.Set(&server.CacheStoreRequest{
-				Key:   cacheKey,
-				Value: content,
+				Key:        cacheKey,
+				Value:      content,
 				Expiration: expiration,
-				CasID: casID,
+				CasID:      casID,
 			}); err != nil {
 				return xerrors.Errorf("failed to set cache to server: %w", err)
 			}
@@ -193,10 +195,11 @@ func (c *LastLevelCache) Delete(tx *Tx, tag, key string) error {
 	}
 	tx.pendingQueries[keyStr] = &PendingQuery{
 		QueryLog: &QueryLog{
-			Key:  keyStr,
-			Hash: cacheKey.Hash(),
-			Type: server.CacheKeyTypeLLC,
-			Addr: addrStr,
+			Command: "delete",
+			Key:     keyStr,
+			Hash:    cacheKey.Hash(),
+			Type:    server.CacheKeyTypeLLC,
+			Addr:    addrStr,
 		},
 		fn: func() error {
 			if err := c.cacheServer.Delete(cacheKey); err != nil {

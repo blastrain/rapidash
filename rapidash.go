@@ -128,10 +128,11 @@ type TagOption struct {
 }
 
 type QueryLog struct {
-	Key  string              `json:"key"`
-	Hash uint32              `json:"hash"`
-	Type server.CacheKeyType `json:"type"`
-	Addr string              `json:"addr"`
+	Command string              `json:"command"`
+	Key     string              `json:"key"`
+	Hash    uint32              `json:"hash"`
+	Type    server.CacheKeyType `json:"type"`
+	Addr    string              `json:"addr"`
 }
 
 type Option struct {
@@ -225,7 +226,7 @@ func NewStash() *Stash {
 		keyToPrimaryKeys:         map[string][]server.CacheKey{},
 		primaryKeyToValue:        map[string]*StructValue{},
 		lastLevelCacheKeyToBytes: map[string][]byte{},
-		casIDs: map[string]uint64{},
+		casIDs:                   map[string]uint64{},
 	}
 }
 
