@@ -532,7 +532,11 @@ func (c *SecondLevelCache) decodePrimaryKey(content []byte, flags uint32) (serve
 	if err != nil {
 		return nil, xerrors.Errorf("failed to decode primary key: %w", err)
 	}
-	return &CacheKey{key: primaryKey, hash: flags}, nil
+	hash := flags
+	if c.opt.shardKey == nil {
+		hash = NewStringValue(primaryKey).Hash()
+	}
+	return &CacheKey{key: primaryKey, hash: hash}, nil
 }
 
 func (c *SecondLevelCache) decodeMultiplePrimaryKeys(content []byte, flags uint32) ([]server.CacheKey, error) {
@@ -548,7 +552,11 @@ func (c *SecondLevelCache) decodeMultiplePrimaryKeys(content []byte, flags uint3
 		if err := dec.DecodeString(&v); err != nil {
 			return nil, xerrors.Errorf("failed to decode string: %w", err)
 		}
-		primaryKeys[i] = &CacheKey{key: v, hash: flags}
+		hash := flags
+		if c.opt.shardKey == nil {
+			hash = NewStringValue(v).Hash()
+		}
+		primaryKeys[i] = &CacheKey{key: v, hash: hash}
 	}
 	return primaryKeys, nil
 }
