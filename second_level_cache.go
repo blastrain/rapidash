@@ -768,6 +768,14 @@ func (c *SecondLevelCache) createCacheByCacheMissQueryMap(tx *Tx, cacheMissQuery
 	return nil
 }
 
+func (c *SecondLevelCache) primaryKeyStringByStructValue(value *StructValue) string {
+	primaryKeys := make([]string, len(c.primaryKey.Columns))
+	for idx, column := range c.primaryKey.Columns {
+		primaryKeys[idx] = value.ValueByColumn(column).String()
+	}
+	return strings.Join(primaryKeys, ":")
+}
+
 func (c *SecondLevelCache) findValuesByQueryBuilder(ctx context.Context, tx *Tx, builder *QueryBuilder) (ssv *StructSliceValue, e error) {
 	if builder.IsUnsupportedCacheQuery() {
 		foundValues, err := c.findValuesByQueryBuilderWithoutCache(ctx, tx, builder)
@@ -813,11 +821,7 @@ func (c *SecondLevelCache) findValuesByQueryBuilder(ctx context.Context, tx *Tx,
 	}
 	alreadyFoundValues := map[string]struct{}{}
 	for _, value := range foundValues.values {
-		primaryKeys := make([]string, len(c.primaryKey.Columns))
-		for idx, column := range c.primaryKey.Columns {
-			primaryKeys[idx] = value.ValueByColumn(column).String()
-		}
-		alreadyFoundValues[strings.Join(primaryKeys, ":")] = struct{}{}
+		alreadyFoundValues[c.primaryKeyStringByStructValue(value)] = struct{}{}
 	}
 	for rows.Next() {
 		scanValues := c.typ.ScanValues(c.valueFactory)
@@ -826,11 +830,7 @@ func (c *SecondLevelCache) findValuesByQueryBuilder(ctx context.Context, tx *Tx,
 		}
 		value := c.typ.StructValue(scanValues)
 
-		primaryKeys := make([]string, len(c.primaryKey.Columns))
-		for idx, column := range c.primaryKey.Columns {
-			primaryKeys[idx] = value.ValueByColumn(column).String()
-		}
-		pkStr := strings.Join(primaryKeys, ":")
+		pkStr := c.primaryKeyStringByStructValue(value)
 		if _, exists := alreadyFoundValues[pkStr]; !exists {
 			alreadyFoundValues[pkStr] = struct{}{}
 			foundValues.Append(value)
