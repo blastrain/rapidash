@@ -813,7 +813,11 @@ func (c *SecondLevelCache) findValuesByQueryBuilder(ctx context.Context, tx *Tx,
 	}
 	alreadyFoundValues := map[string]struct{}{}
 	for _, value := range foundValues.values {
-		alreadyFoundValues[value.ValueByColumn(c.primaryKey.Columns[0]).String()] = struct{}{}
+		primaryKeys := make([]string, len(c.primaryKey.Columns))
+		for idx, column := range c.primaryKey.Columns {
+			primaryKeys[idx] = value.ValueByColumn(column).String()
+		}
+		alreadyFoundValues[strings.Join(primaryKeys, ":")] = struct{}{}
 	}
 	for rows.Next() {
 		scanValues := c.typ.ScanValues(c.valueFactory)
@@ -821,8 +825,14 @@ func (c *SecondLevelCache) findValuesByQueryBuilder(ctx context.Context, tx *Tx,
 			return nil, xerrors.Errorf("failed to scan: %w", err)
 		}
 		value := c.typ.StructValue(scanValues)
-		if _, exists := alreadyFoundValues[value.ValueByColumn(c.primaryKey.Columns[0]).String()]; !exists {
-			alreadyFoundValues[value.ValueByColumn(c.primaryKey.Columns[0]).String()] = struct{}{}
+
+		primaryKeys := make([]string, len(c.primaryKey.Columns))
+		for idx, column := range c.primaryKey.Columns {
+			primaryKeys[idx] = value.ValueByColumn(column).String()
+		}
+		pkStr := strings.Join(primaryKeys, ":")
+		if _, exists := alreadyFoundValues[pkStr]; !exists {
+			alreadyFoundValues[pkStr] = struct{}{}
 			foundValues.Append(value)
 			if !isNopLogger {
 				dbValues.Append(value)
