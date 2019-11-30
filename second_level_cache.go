@@ -811,43 +811,30 @@ func (c *SecondLevelCache) findValuesByQueryBuilder(ctx context.Context, tx *Tx,
 	if !isNopLogger {
 		dbValues = NewStructSliceValue()
 	}
+	alreadyFoundValues := map[string]struct{}{}
+	for _, value := range foundValues.values {
+		alreadyFoundValues[value.ValueByColumn(c.primaryKey.Columns[0]).String()] = struct{}{}
+	}
 	for rows.Next() {
 		scanValues := c.typ.ScanValues(c.valueFactory)
 		if err := rows.Scan(scanValues...); err != nil {
 			return nil, xerrors.Errorf("failed to scan: %w", err)
 		}
 		value := c.typ.StructValue(scanValues)
-		if foundValues.Len() == 0 {
+		if _, exists := alreadyFoundValues[value.ValueByColumn(c.primaryKey.Columns[0]).String()]; !exists {
+			alreadyFoundValues[value.ValueByColumn(c.primaryKey.Columns[0]).String()] = struct{}{}
 			foundValues.Append(value)
 			if !isNopLogger {
 				dbValues.Append(value)
 			}
-			cacheMissQuery := queries.FindCacheMissQueryByStructValue(value)
-			if cacheMissQuery == nil {
-				continue
-			}
-			cacheMissQueryMap[cacheMissQuery] = append(cacheMissQueryMap[cacheMissQuery], value)
-		} else {
-			shouldAppend := true
-			for _, v := range foundValues.values {
-				if v.ValueByColumn(c.primaryKey.Columns[0]).EQ(value.ValueByColumn(c.primaryKey.Columns[0])) {
-					shouldAppend = false
-					break
-				}
-			}
-			if shouldAppend {
-				foundValues.Append(value)
-				if !isNopLogger {
-					dbValues.Append(value)
-				}
-				cacheMissQuery := queries.FindCacheMissQueryByStructValue(value)
-				if cacheMissQuery == nil {
-					continue
-				}
-				cacheMissQueryMap[cacheMissQuery] = append(cacheMissQueryMap[cacheMissQuery], value)
-			}
 		}
+		cacheMissQuery := queries.FindCacheMissQueryByStructValue(value)
+		if cacheMissQuery == nil {
+			continue
+		}
+		cacheMissQueryMap[cacheMissQuery] = append(cacheMissQueryMap[cacheMissQuery], value)
 	}
+
 	log.GetFromDB(tx.id, query, values, dbValues)
 	if builder.isIgnoreCache {
 		return foundValues, nil
