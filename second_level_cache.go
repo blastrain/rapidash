@@ -768,6 +768,14 @@ func (c *SecondLevelCache) createCacheByCacheMissQueryMap(tx *Tx, cacheMissQuery
 	return nil
 }
 
+func (c *SecondLevelCache) primaryKeyStringByStructValue(value *StructValue) string {
+	primaryKeys := make([]string, len(c.primaryKey.Columns))
+	for idx, column := range c.primaryKey.Columns {
+		primaryKeys[idx] = value.ValueByColumn(column).String()
+	}
+	return strings.Join(primaryKeys, ":")
+}
+
 func (c *SecondLevelCache) findValuesByQueryBuilder(ctx context.Context, tx *Tx, builder *QueryBuilder) (ssv *StructSliceValue, e error) {
 	if builder.IsUnsupportedCacheQuery() {
 		foundValues, err := c.findValuesByQueryBuilderWithoutCache(ctx, tx, builder)
@@ -789,7 +797,6 @@ func (c *SecondLevelCache) findValuesByQueryBuilder(ctx context.Context, tx *Tx,
 	if err != nil {
 		return nil, xerrors.Errorf("failed to find values by cache: %w", err)
 	}
-
 	query, values := queries.CacheMissQueriesToSQL(c.typ)
 	if query == "" {
 		return foundValues, nil
@@ -812,15 +819,24 @@ func (c *SecondLevelCache) findValuesByQueryBuilder(ctx context.Context, tx *Tx,
 	if !isNopLogger {
 		dbValues = NewStructSliceValue()
 	}
+	alreadyFoundValues := map[string]struct{}{}
+	for _, value := range foundValues.values {
+		alreadyFoundValues[c.primaryKeyStringByStructValue(value)] = struct{}{}
+	}
 	for rows.Next() {
 		scanValues := c.typ.ScanValues(c.valueFactory)
 		if err := rows.Scan(scanValues...); err != nil {
 			return nil, xerrors.Errorf("failed to scan: %w", err)
 		}
 		value := c.typ.StructValue(scanValues)
-		foundValues.Append(value)
-		if !isNopLogger {
-			dbValues.Append(value)
+
+		pkStr := c.primaryKeyStringByStructValue(value)
+		if _, exists := alreadyFoundValues[pkStr]; !exists {
+			alreadyFoundValues[pkStr] = struct{}{}
+			foundValues.Append(value)
+			if !isNopLogger {
+				dbValues.Append(value)
+			}
 		}
 		cacheMissQuery := queries.FindCacheMissQueryByStructValue(value)
 		if cacheMissQuery == nil {
@@ -828,6 +844,7 @@ func (c *SecondLevelCache) findValuesByQueryBuilder(ctx context.Context, tx *Tx,
 		}
 		cacheMissQueryMap[cacheMissQuery] = append(cacheMissQueryMap[cacheMissQuery], value)
 	}
+
 	log.GetFromDB(tx.id, query, values, dbValues)
 	if builder.isIgnoreCache {
 		return foundValues, nil

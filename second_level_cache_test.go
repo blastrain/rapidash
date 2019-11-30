@@ -710,7 +710,7 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 		NoError(t, tx.Commit())
 	})
 
-	t.Run("partially found pk and value in cache", func(t *testing.T) {
+	t.Run("partially found pk and value in cache with uq key", func(t *testing.T) {
 		NoError(t, initUserLoginTable(conn))
 		NoError(t, initCache(conn, typ))
 		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
@@ -735,6 +735,92 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 		var userLogins UserLogins
 		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &userLogins))
 		if len(userLogins) != 6 {
+			t.Fatal("cannot work FindByQueryBuilder")
+		}
+		NoError(t, tx.Commit())
+	})
+	t.Run("partially found pk and value in cache with idx key", func(t *testing.T) {
+		NoError(t, initUserLoginTable(conn))
+		NoError(t, initCache(conn, typ))
+		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+		NoError(t, slc.WarmUp(conn))
+		{
+			txConn, err := conn.Begin()
+			NoError(t, err)
+			tx, err := cache.Begin(txConn)
+			NoError(t, err)
+			now := time.Now()
+			_, err = slc.Create(context.Background(), tx, &UserLogin{
+				UserID:        5,
+				UserSessionID: 2,
+				LoginParamID:  1,
+				CreatedAt:     &now,
+				UpdatedAt:     &now,
+			})
+			NoError(t, err)
+			_, err = slc.Create(context.Background(), tx, &UserLogin{
+				UserID:        5,
+				UserSessionID: 3,
+				LoginParamID:  1,
+				CreatedAt:     &now,
+				UpdatedAt:     &now,
+			})
+			NoError(t, err)
+			_, err = slc.Create(context.Background(), tx, &UserLogin{
+				UserID:        5,
+				UserSessionID: 4,
+				LoginParamID:  1,
+				CreatedAt:     &now,
+				UpdatedAt:     &now,
+			})
+			NoError(t, err)
+			_, err = slc.Create(context.Background(), tx, &UserLogin{
+				UserID:        5,
+				UserSessionID: 5,
+				LoginParamID:  1,
+				CreatedAt:     &now,
+				UpdatedAt:     &now,
+			})
+			NoError(t, err)
+			NoError(t, tx.Commit())
+		}
+		{
+			builder := NewQueryBuilder("user_logins").
+				Eq("user_id", uint64(5)).
+				In("login_param_id", []uint64{1, 2})
+			txConn, err := conn.Begin()
+			NoError(t, err)
+			tx, err := cache.Begin(txConn)
+			NoError(t, err)
+			var userLogins UserLogins
+			NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &userLogins))
+			if len(userLogins) != 5 {
+				t.Fatal("cannot work FindByQueryBuilder")
+			}
+			NoError(t, tx.Commit())
+		}
+		{
+			txConn, err := conn.Begin()
+			NoError(t, err)
+			defer func() { NoError(t, txConn.Rollback()) }()
+			tx, err := cache.Begin(txConn)
+			NoError(t, err)
+			NoError(t, slc.DeleteByPrimaryKey(tx, NewUint64Value(5)))
+			NoError(t, slc.DeleteByPrimaryKey(tx, NewUint64Value(1001)))
+			NoError(t, slc.delete(tx, &CacheKey{key: "r/slc/user_logins/idx/user_id#5&login_param_id#2"}))
+			NoError(t, tx.CommitCacheOnly())
+		}
+
+		builder := NewQueryBuilder("user_logins").
+			Eq("user_id", uint64(5)).
+			In("login_param_id", []uint64{1, 2})
+		txConn, err := conn.Begin()
+		NoError(t, err)
+		tx, err := cache.Begin(txConn)
+		NoError(t, err)
+		var userLogins UserLogins
+		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &userLogins))
+		if len(userLogins) != 5 {
 			t.Fatal("cannot work FindByQueryBuilder")
 		}
 		NoError(t, tx.Commit())

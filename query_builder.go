@@ -315,7 +315,9 @@ func (q *Queries) LoadValues(factory *ValueFactory, primaryKeyLoader func(IndexT
 
 	existsFirstPhaseCacheMissQuery := len(q.cacheMissQueries) != 0
 	alreadyAddedCacheMissQueryMap := map[*Query]struct{}{}
-
+	for _, query := range q.cacheMissQueries {
+		alreadyAddedCacheMissQueryMap[query] = struct{}{}
+	}
 	for valueIter.Next() {
 		if err := valueIter.Error(); err != nil {
 			if IsCacheMiss(err) {
@@ -323,6 +325,7 @@ func (q *Queries) LoadValues(factory *ValueFactory, primaryKeyLoader func(IndexT
 					query := queryIter.QueryByPrimaryKey(valueIter.PrimaryKey())
 					if _, exists := alreadyAddedCacheMissQueryMap[query]; !exists {
 						q.cacheMissQueries = append(q.cacheMissQueries, query)
+						alreadyAddedCacheMissQueryMap[query] = struct{}{}
 					}
 					continue
 				}
