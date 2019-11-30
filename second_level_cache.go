@@ -717,7 +717,7 @@ func (c *SecondLevelCache) setPrimaryKeysByKeys(tx *Tx, queryIter *QueryIterator
 }
 
 func (c *SecondLevelCache) findValuesByCache(tx *Tx, builder *QueryBuilder, queries *Queries) (*StructSliceValue, error) {
-	if builder.isIgnoreCache {
+	if builder.isIgnoreCache || builder.lockOpt != nil {
 		queries.cacheMissQueries = queries.queries
 		return NewStructSliceValue(), nil
 	}

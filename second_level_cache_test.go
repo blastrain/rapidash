@@ -1222,6 +1222,65 @@ func TestIndexColumnUpdateByPrimaryKey(t *testing.T) {
 	}
 }
 
+func TestLockingRead(t *testing.T) {
+	NoError(t, initUserLoginTable(conn))
+	NoError(t, initCache(conn, CacheServerTypeMemcached))
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	NoError(t, slc.cacheServer.Flush())
+	NoError(t, slc.WarmUp(conn))
+
+	txConn, err := conn.Begin()
+	NoError(t, err)
+	tx, err := cache.Begin(txConn)
+	NoError(t, err)
+
+	// store cache to stash
+	{
+		builder := NewQueryBuilder("user_logins").Eq("user_id", uint64(1))
+
+		var userLogin UserLogin
+		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &userLogin))
+		if userLogin.ID == 0 {
+			t.Fatal("failed to get cached value")
+		}
+		if userLogin.LoginParamID != 1 {
+			t.Fatal("invalid param")
+		}
+	}
+
+	// update cache another transaction
+	{
+		txConn, err := conn.Begin()
+		NoError(t, err)
+		tx, err := cache.Begin(txConn)
+		NoError(t, err)
+		updateParam := map[string]interface{}{
+			"login_param_id": uint64(2),
+		}
+		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		NoError(t, slc.UpdateByQueryBuilder(context.Background(), tx, builder, updateParam))
+		NoError(t, tx.Commit())
+	}
+
+	// repeatable read.
+	// in this case, cannot get updated value in normal query,
+	// but if use locking read query, could read updated value.
+	{
+		builder := NewQueryBuilder("user_logins").Eq("user_id", uint64(1)).ForUpdate()
+
+		var userLogin UserLogin
+		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &userLogin))
+		if userLogin.ID == 0 {
+			t.Fatal("failed to get cached value")
+		}
+		if userLogin.LoginParamID != 2 {
+			t.Fatal("invalid param")
+		}
+	}
+
+	NoError(t, tx.Commit())
+}
+
 func TestDeleteByQueryBuilder(t *testing.T) {
 	for cacheServerType := range []CacheServerType{CacheServerTypeMemcached, CacheServerTypeRedis} {
 		testDeleteByQueryBuilder(t, CacheServerType(cacheServerType))
