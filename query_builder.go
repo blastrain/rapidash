@@ -251,6 +251,7 @@ type Queries struct {
 	cacheMissQueries []*Query
 	rawSQL           string
 	rawSQLValues     []interface{}
+	lockOpt          *LockingReadOption
 	isAllSQL         bool
 }
 
@@ -428,10 +429,15 @@ func (q *Queries) CacheMissQueriesToSQL(typ *Struct) (string, []interface{}) {
 		}
 		conditions = append(conditions, condition)
 	}
-	return fmt.Sprintf("SELECT %s FROM `%s` WHERE %s",
+	lockOpt := q.lockOpt.String()
+	if lockOpt != "" {
+		lockOpt = " " + lockOpt
+	}
+	return fmt.Sprintf("SELECT %s FROM `%s` WHERE %s%s",
 		strings.Join(escapedColumns, ","),
 		q.tableName,
 		strings.Join(conditions, " AND "),
+		lockOpt,
 	), queryArgs
 }
 
@@ -525,6 +531,7 @@ type QueryBuilder struct {
 	inCondition     *INCondition
 	sqlCondition    *SQLCondition
 	orderConditions []*OrderCondition
+	lockOpt         *LockingReadOption
 	err             error
 	isIgnoreCache   bool
 	cachedQueries   *Queries
@@ -601,10 +608,15 @@ func (b *QueryBuilder) SelectSQL(typ *Struct) (string, []interface{}) {
 	for _, column := range typ.Columns() {
 		escapedColumns = append(escapedColumns, fmt.Sprintf("`%s`", column))
 	}
-	return fmt.Sprintf("SELECT %s FROM `%s` WHERE %s",
+	lockOpt := b.lockOpt.String()
+	if lockOpt != "" {
+		lockOpt = " " + lockOpt
+	}
+	return fmt.Sprintf("SELECT %s FROM `%s` WHERE %s%s",
 		strings.Join(escapedColumns, ","),
 		b.tableName,
 		strings.Join(where, " AND "),
+		lockOpt,
 	), args
 }
 
@@ -770,6 +782,7 @@ func (b *QueryBuilder) BuildWithIndex(factory *ValueFactory, indexes map[string]
 	}
 	columnNum := len(b.conditions.conditions)
 	queries := NewQueries(b.tableName, b.primaryIndexFromIndexes(indexes), 1)
+	queries.lockOpt = b.lockOpt
 	query := NewQuery(columnNum)
 	for _, condition := range b.conditions.conditions {
 		query.Add(condition)
@@ -884,6 +897,34 @@ func (b *QueryBuilder) OrderAsc(column string) *QueryBuilder {
 
 func (b *QueryBuilder) OrderDesc(column string) *QueryBuilder {
 	b.orderConditions = append(b.orderConditions, &OrderCondition{column: column, isAsc: false})
+	return b
+}
+
+type LockingReadOption struct {
+	isSharedLock    bool // LOCK IN SHARE MODE
+	isExclusiveLock bool // FOR UPDATE
+}
+
+func (o *LockingReadOption) String() string {
+	if o == nil {
+		return ""
+	}
+	if o.isSharedLock {
+		return "LOCK IN SHARE MODE"
+	}
+	if o.isExclusiveLock {
+		return "FOR UPDATE"
+	}
+	return ""
+}
+
+func (b *QueryBuilder) LockInShareMode() *QueryBuilder {
+	b.lockOpt = &LockingReadOption{isSharedLock: true}
+	return b
+}
+
+func (b *QueryBuilder) ForUpdate() *QueryBuilder {
+	b.lockOpt = &LockingReadOption{isExclusiveLock: true}
 	return b
 }
 
