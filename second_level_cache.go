@@ -789,7 +789,6 @@ func (c *SecondLevelCache) findValuesByQueryBuilder(ctx context.Context, tx *Tx,
 	if err != nil {
 		return nil, xerrors.Errorf("failed to find values by cache: %w", err)
 	}
-
 	query, values := queries.CacheMissQueriesToSQL(c.typ)
 	if query == "" {
 		return foundValues, nil
@@ -818,15 +817,36 @@ func (c *SecondLevelCache) findValuesByQueryBuilder(ctx context.Context, tx *Tx,
 			return nil, xerrors.Errorf("failed to scan: %w", err)
 		}
 		value := c.typ.StructValue(scanValues)
-		foundValues.Append(value)
-		if !isNopLogger {
-			dbValues.Append(value)
+		if foundValues.Len() == 0 {
+			foundValues.Append(value)
+			if !isNopLogger {
+				dbValues.Append(value)
+			}
+			cacheMissQuery := queries.FindCacheMissQueryByStructValue(value)
+			if cacheMissQuery == nil {
+				continue
+			}
+			cacheMissQueryMap[cacheMissQuery] = append(cacheMissQueryMap[cacheMissQuery], value)
+		} else {
+			shouldAppend := true
+			for _, v := range foundValues.values {
+				if v.ValueByColumn(c.primaryKey.Columns[0]).EQ(value.ValueByColumn(c.primaryKey.Columns[0])) {
+					shouldAppend = false
+					break
+				}
+			}
+			if shouldAppend {
+				foundValues.Append(value)
+				if !isNopLogger {
+					dbValues.Append(value)
+				}
+				cacheMissQuery := queries.FindCacheMissQueryByStructValue(value)
+				if cacheMissQuery == nil {
+					continue
+				}
+				cacheMissQueryMap[cacheMissQuery] = append(cacheMissQueryMap[cacheMissQuery], value)
+			}
 		}
-		cacheMissQuery := queries.FindCacheMissQueryByStructValue(value)
-		if cacheMissQuery == nil {
-			continue
-		}
-		cacheMissQueryMap[cacheMissQuery] = append(cacheMissQueryMap[cacheMissQuery], value)
 	}
 	log.GetFromDB(tx.id, query, values, dbValues)
 	if builder.isIgnoreCache {
