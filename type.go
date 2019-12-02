@@ -3688,7 +3688,8 @@ func (v *StructValue) IntPtr(column string) *int {
 			v.typ.tableName, column, value.typ, ErrInvalidDecodeType)
 		return nil
 	}
-	return &value.intValue
+	i := value.intValue
+	return &i
 }
 
 func (v *StructValue) Int8Ptr(column string) *int8 {
@@ -3708,7 +3709,8 @@ func (v *StructValue) Int8Ptr(column string) *int8 {
 			v.typ.tableName, column, value.typ, ErrInvalidDecodeType)
 		return nil
 	}
-	return &value.int8Value
+	i := value.int8Value
+	return &i
 }
 
 func (v *StructValue) Int16Ptr(column string) *int16 {
@@ -3728,7 +3730,8 @@ func (v *StructValue) Int16Ptr(column string) *int16 {
 			v.typ.tableName, column, value.typ, ErrInvalidDecodeType)
 		return nil
 	}
-	return &value.int16Value
+	i := value.int16Value
+	return &i
 }
 
 func (v *StructValue) Int32Ptr(column string) *int32 {
@@ -3748,7 +3751,8 @@ func (v *StructValue) Int32Ptr(column string) *int32 {
 			v.typ.tableName, column, value.typ, ErrInvalidDecodeType)
 		return nil
 	}
-	return &value.int32Value
+	i := value.int32Value
+	return &i
 }
 
 func (v *StructValue) Int64Ptr(column string) *int64 {
@@ -3768,7 +3772,8 @@ func (v *StructValue) Int64Ptr(column string) *int64 {
 			v.typ.tableName, column, value.typ, ErrInvalidDecodeType)
 		return nil
 	}
-	return &value.int64Value
+	i := value.int64Value
+	return &i
 }
 
 func (v *StructValue) UintPtr(column string) *uint {
@@ -3788,7 +3793,8 @@ func (v *StructValue) UintPtr(column string) *uint {
 			v.typ.tableName, column, value.typ, ErrInvalidDecodeType)
 		return nil
 	}
-	return &value.uintValue
+	u := value.uintValue
+	return &u
 }
 
 func (v *StructValue) Uint8Ptr(column string) *uint8 {
@@ -3808,7 +3814,8 @@ func (v *StructValue) Uint8Ptr(column string) *uint8 {
 			v.typ.tableName, column, value.typ, ErrInvalidDecodeType)
 		return nil
 	}
-	return &value.uint8Value
+	u := value.uint8Value
+	return &u
 }
 
 func (v *StructValue) Uint16Ptr(column string) *uint16 {
@@ -3828,7 +3835,8 @@ func (v *StructValue) Uint16Ptr(column string) *uint16 {
 			v.typ.tableName, column, value.typ, ErrInvalidDecodeType)
 		return nil
 	}
-	return &value.uint16Value
+	u := value.uint16Value
+	return &u
 }
 
 func (v *StructValue) Uint32Ptr(column string) *uint32 {
@@ -3848,7 +3856,8 @@ func (v *StructValue) Uint32Ptr(column string) *uint32 {
 			v.typ.tableName, column, value.typ, ErrInvalidDecodeType)
 		return nil
 	}
-	return &value.uint32Value
+	u := value.uint32Value
+	return &u
 }
 
 func (v *StructValue) Uint64Ptr(column string) *uint64 {
@@ -3868,7 +3877,8 @@ func (v *StructValue) Uint64Ptr(column string) *uint64 {
 			v.typ.tableName, column, value.typ, ErrInvalidDecodeType)
 		return nil
 	}
-	return &value.uint64Value
+	u := value.uint64Value
+	return &u
 }
 
 func (v *StructValue) Float32Ptr(column string) *float32 {
@@ -3888,7 +3898,8 @@ func (v *StructValue) Float32Ptr(column string) *float32 {
 			v.typ.tableName, column, value.typ, ErrInvalidDecodeType)
 		return nil
 	}
-	return &value.float32Value
+	f := value.float32Value
+	return &f
 }
 
 func (v *StructValue) Float64Ptr(column string) *float64 {
@@ -3908,7 +3919,8 @@ func (v *StructValue) Float64Ptr(column string) *float64 {
 			v.typ.tableName, column, value.typ, ErrInvalidDecodeType)
 		return nil
 	}
-	return &value.float64Value
+	f := value.float64Value
+	return &f
 }
 
 func (v *StructValue) BoolPtr(column string) *bool {
@@ -3928,7 +3940,8 @@ func (v *StructValue) BoolPtr(column string) *bool {
 			v.typ.tableName, column, value.typ, ErrInvalidDecodeType)
 		return nil
 	}
-	return &value.boolValue
+	b := value.boolValue
+	return &b
 }
 
 func (v *StructValue) StringPtr(column string) *string {
@@ -3948,7 +3961,8 @@ func (v *StructValue) StringPtr(column string) *string {
 			v.typ.tableName, column, value.typ, ErrInvalidDecodeType)
 		return nil
 	}
-	return &value.stringValue
+	s := value.stringValue
+	return &s
 }
 
 func (v *StructValue) BytesPtr(column string) *[]byte {
@@ -3968,7 +3982,8 @@ func (v *StructValue) BytesPtr(column string) *[]byte {
 			v.typ.tableName, column, value.typ, ErrInvalidDecodeType)
 		return nil
 	}
-	return &value.bytesValue
+	b := value.bytesValue
+	return &b
 }
 
 func (v *StructValue) TimePtr(column string) *time.Time {
@@ -3988,7 +4003,8 @@ func (v *StructValue) TimePtr(column string) *time.Time {
 			v.typ.tableName, column, value.typ, ErrInvalidDecodeType)
 		return nil
 	}
-	return &value.timeValue
+	t := value.timeValue
+	return &t
 }
 
 func (v *StructValue) Error() error {
