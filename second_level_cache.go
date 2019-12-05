@@ -174,21 +174,21 @@ func (c *SecondLevelCache) setupPrimaryKey(constraint *sqlparser.Constraint) {
 		c.indexColumns[column] = struct{}{}
 		columns = append(columns, column)
 	}
-	if shardKey != "" && isNotFoundShardKey {
-		columns = append(columns, c.opt.ShardKey())
-	}
 	primaryKey := strings.Join(columns, ":")
 	for idx := range columns {
-		subColumns := columns[:idx+1]
+		subColumns := columns[:idx+1:idx+1]
 		if len(subColumns) == 0 {
 			continue
 		}
 		index := strings.Join(subColumns, ":")
+		if shardKey != "" && isNotFoundShardKey {
+			subColumns = append(subColumns, shardKey)
+		}
 		if index == primaryKey {
 			c.primaryKey = NewPrimaryKey(c.opt, c.typ.tableName, subColumns, c.typ)
-			c.indexes[primaryKey] = c.primaryKey
-		} else if shardKey == "" {
-			c.indexes[index] = NewKey(c.opt, c.typ.tableName, subColumns, c.typ)
+			c.indexes[strings.Join(subColumns, ":")] = c.primaryKey
+		} else {
+			c.indexes[strings.Join(subColumns, ":")] = NewKey(c.opt, c.typ.tableName, subColumns, c.typ)
 		}
 	}
 }
