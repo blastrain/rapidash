@@ -2077,6 +2077,7 @@ func TestWarmUp(t *testing.T) {
 		v, exists := slc.indexes["id"]
 		Equal(t, exists, true)
 		Equal(t, len(v.Columns), 1)
+		Equal(t, v.Type, IndexTypePrimaryKey)
 		Equal(t, v.Columns[0], "id")
 
 		t.Run("with shard_key", func(t *testing.T) {
@@ -2088,6 +2089,7 @@ func TestWarmUp(t *testing.T) {
 			v, exists := slc.indexes["id:user_id"]
 			Equal(t, exists, true)
 			Equal(t, len(v.Columns), 2)
+			Equal(t, v.Type, IndexTypePrimaryKey)
 			Equal(t, v.Columns[0], "id")
 			Equal(t, v.Columns[1], "user_id")
 		})
@@ -2103,12 +2105,14 @@ func TestWarmUp(t *testing.T) {
 			v, exists := slc.indexes["id"]
 			Equal(t, exists, true)
 			Equal(t, len(v.Columns), 1)
+			Equal(t, v.Type, IndexTypeKey)
 			Equal(t, v.Columns[0], "id")
 		}
 		{
 			v, exists := slc.indexes["id:created_at"]
 			Equal(t, exists, true)
 			Equal(t, len(v.Columns), 2)
+			Equal(t, v.Type, IndexTypePrimaryKey)
 			Equal(t, v.Columns[0], "id")
 			Equal(t, v.Columns[1], "created_at")
 		}
@@ -2123,6 +2127,7 @@ func TestWarmUp(t *testing.T) {
 				v, exists := slc.indexes["id:user_id"]
 				Equal(t, exists, true)
 				Equal(t, len(v.Columns), 2)
+				Equal(t, v.Type, IndexTypeKey)
 				Equal(t, v.Columns[0], "id")
 				Equal(t, v.Columns[1], "user_id")
 			}
@@ -2130,6 +2135,7 @@ func TestWarmUp(t *testing.T) {
 				v, exists := slc.indexes["id:created_at:user_id"]
 				Equal(t, exists, true)
 				Equal(t, len(v.Columns), 3)
+				Equal(t, v.Type, IndexTypePrimaryKey)
 				Equal(t, v.Columns[0], "id")
 				Equal(t, v.Columns[1], "created_at")
 				Equal(t, v.Columns[2], "user_id")
@@ -2137,4 +2143,63 @@ func TestWarmUp(t *testing.T) {
 		})
 	})
 
+	t.Run("index key", func(t *testing.T) {
+		_, err := conn.Exec("ALTER TABLE warm_up_users DROP PRIMARY KEY, ADD PRIMARY KEY (id), ADD INDEX idx_user_id_nickname(user_id, nickname)")
+		NoError(t, err)
+		slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{})
+		NoError(t, slc.WarmUp(conn))
+		Equal(t, len(slc.indexes), 3)
+		{
+			v, exists := slc.indexes["id"]
+			Equal(t, exists, true)
+			Equal(t, len(v.Columns), 1)
+			Equal(t, v.Type, IndexTypePrimaryKey)
+			Equal(t, v.Columns[0], "id")
+		}
+		{
+			v, exists := slc.indexes["user_id"]
+			Equal(t, exists, true)
+			Equal(t, len(v.Columns), 1)
+			Equal(t, v.Type, IndexTypeKey)
+			Equal(t, v.Columns[0], "user_id")
+		}
+		{
+			v, exists := slc.indexes["user_id:nickname"]
+			Equal(t, exists, true)
+			Equal(t, len(v.Columns), 2)
+			Equal(t, v.Type, IndexTypeKey)
+			Equal(t, v.Columns[0], "user_id")
+			Equal(t, v.Columns[1], "nickname")
+		}
+	})
+
+	t.Run("unique key", func(t *testing.T) {
+		_, err := conn.Exec("ALTER TABLE warm_up_users DROP INDEX idx_user_id_nickname, ADD UNIQUE uq_user_id_nickname(user_id, nickname)")
+		NoError(t, err)
+		slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{})
+		NoError(t, slc.WarmUp(conn))
+		Equal(t, len(slc.indexes), 3)
+		{
+			v, exists := slc.indexes["id"]
+			Equal(t, exists, true)
+			Equal(t, len(v.Columns), 1)
+			Equal(t, v.Type, IndexTypePrimaryKey)
+			Equal(t, v.Columns[0], "id")
+		}
+		{
+			v, exists := slc.indexes["user_id"]
+			Equal(t, exists, true)
+			Equal(t, len(v.Columns), 1)
+			Equal(t, v.Type, IndexTypeKey)
+			Equal(t, v.Columns[0], "user_id")
+		}
+		{
+			v, exists := slc.indexes["user_id:nickname"]
+			Equal(t, exists, true)
+			Equal(t, len(v.Columns), 2)
+			Equal(t, v.Type, IndexTypeUniqueKey)
+			Equal(t, v.Columns[0], "user_id")
+			Equal(t, v.Columns[1], "nickname")
+		}
+	})
 }
