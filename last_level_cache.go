@@ -78,7 +78,7 @@ func (c *LastLevelCache) enabledStash(tag string) bool {
 
 func (c *LastLevelCache) set(tx *Tx, tag string, cacheKey server.CacheKey, content []byte, expiration time.Duration) error {
 	casID := uint64(0)
-	if c.opt.optimisticLock && c.enabledStash(tag) {
+	if c.opt.optimisticLock {
 		casID = tx.stash.casIDs[cacheKey.String()]
 	}
 	if err := c.cacheServer.Set(&server.CacheStoreRequest{
@@ -157,9 +157,7 @@ func (c *LastLevelCache) Find(tx *Tx, tag, key string, value Type) error {
 	if err != nil {
 		return xerrors.Errorf("failed to get cache from server: %w", err)
 	}
-	if c.enabledStash(tag) {
-		tx.stash.casIDs[cacheKey.String()] = content.CasID
-	}
+	tx.stash.casIDs[cacheKey.String()] = content.CasID
 	if err := value.Decode(content.Value); err != nil {
 		return xerrors.Errorf("failed to decode value: %w", err)
 	}
