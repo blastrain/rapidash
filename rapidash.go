@@ -125,6 +125,7 @@ type TagOption struct {
 	server         string
 	expiration     time.Duration
 	lockExpiration time.Duration
+	ignoreStash    bool
 }
 
 type QueryLog struct {

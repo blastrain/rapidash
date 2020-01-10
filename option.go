@@ -176,6 +176,14 @@ func LastLevelCacheTagServerAddr(tag string, serverAddr string) OptionFunc {
 	}
 }
 
+func LastLevelCacheTagIgnoreStash(tag string) OptionFunc {
+	return func(r *Rapidash) {
+		opt := r.opt.llcOpt.tagOpt[tag]
+		opt.ignoreStash = true
+		r.opt.llcOpt.tagOpt[tag] = opt
+	}
+}
+
 func LastLevelCacheTagExpiration(tag string, expiration time.Duration) OptionFunc {
 	return func(r *Rapidash) {
 		opt := r.opt.llcOpt.tagOpt[tag]
