@@ -25,7 +25,7 @@ func (c *LastLevelCache) cacheKey(tag, key string) (server.CacheKey, error) {
 		key: fmt.Sprintf("r/llc/%s", key),
 		typ: server.CacheKeyTypeLLC,
 	}
-	if opt, exists := c.opt.tagOpt[tag]; exists {
+	if opt := c.opt.tagOpt[tag]; opt.server != "" {
 		addr, err := getAddr(opt.server)
 		if err != nil {
 			return nil, xerrors.Errorf("cannot get addr: %w", err)
@@ -71,6 +71,27 @@ func (c *LastLevelCache) lockKey(tx *Tx, key server.CacheKey, expiration time.Du
 	return nil
 }
 
+func (c *LastLevelCache) enabledStash(tag string) bool {
+	opt := c.opt.tagOpt[tag]
+	return !opt.ignoreStash
+}
+
+func (c *LastLevelCache) set(tx *Tx, tag string, cacheKey server.CacheKey, content []byte, expiration time.Duration) error {
+	casID := uint64(0)
+	if c.opt.optimisticLock {
+		casID = tx.stash.casIDs[cacheKey.String()]
+	}
+	if err := c.cacheServer.Set(&server.CacheStoreRequest{
+		Key:        cacheKey,
+		Value:      content,
+		Expiration: expiration,
+		CasID:      casID,
+	}); err != nil {
+		return xerrors.Errorf("failed to set cache to server: %w", err)
+	}
+	return nil
+}
+
 func (c *LastLevelCache) Create(tx *Tx, tag, key string, value Type, expiration time.Duration) error {
 	cacheKey, err := c.cacheKey(tag, key)
 	if err != nil {
@@ -81,7 +102,9 @@ func (c *LastLevelCache) Create(tx *Tx, tag, key string, value Type, expiration 
 		return xerrors.Errorf("failed to encode value: %w", err)
 	}
 	keyStr := cacheKey.String()
-	tx.stash.lastLevelCacheKeyToBytes[keyStr] = content
+	if c.enabledStash(tag) {
+		tx.stash.lastLevelCacheKeyToBytes[keyStr] = content
+	}
 	if c.opt.pessimisticLock {
 		if _, exists := tx.pendingQueries[keyStr]; !exists {
 			if err := c.lockKey(tx, cacheKey, c.opt.lockExpiration); err != nil {
@@ -93,20 +116,26 @@ func (c *LastLevelCache) Create(tx *Tx, tag, key string, value Type, expiration 
 	if addr := cacheKey.Addr(); addr != nil {
 		addrStr = addr.String()
 	}
-	tx.pendingQueries[keyStr] = &PendingQuery{
-		QueryLog: &QueryLog{
-			Command: "add",
-			Key:     keyStr,
-			Hash:    cacheKey.Hash(),
-			Type:    server.CacheKeyTypeLLC,
-			Addr:    addrStr,
-		},
-		fn: func() error {
-			if err := c.cacheServer.Add(cacheKey, content, expiration); err != nil {
-				return xerrors.Errorf("failed to add cache to server: %w", err)
-			}
-			return nil
-		},
+	if c.enabledStash(tag) {
+		tx.pendingQueries[keyStr] = &PendingQuery{
+			QueryLog: &QueryLog{
+				Command: "add",
+				Key:     keyStr,
+				Hash:    cacheKey.Hash(),
+				Type:    server.CacheKeyTypeLLC,
+				Addr:    addrStr,
+			},
+			fn: func() error {
+				if err := c.cacheServer.Add(cacheKey, content, expiration); err != nil {
+					return xerrors.Errorf("failed to add cache to server: %w", err)
+				}
+				return nil
+			},
+		}
+		return nil
+	}
+	if err := c.cacheServer.Add(cacheKey, content, expiration); err != nil {
+		return xerrors.Errorf("failed to add cache to server: %w", err)
 	}
 	return nil
 }
@@ -116,11 +145,13 @@ func (c *LastLevelCache) Find(tx *Tx, tag, key string, value Type) error {
 	if err != nil {
 		return xerrors.Errorf("failed to get cacheKey: %w", err)
 	}
-	if content, exists := tx.stash.lastLevelCacheKeyToBytes[cacheKey.String()]; exists {
-		if err := value.Decode(content); err != nil {
-			return xerrors.Errorf("failed to decode value: %w", err)
+	if c.enabledStash(tag) {
+		if content, exists := tx.stash.lastLevelCacheKeyToBytes[cacheKey.String()]; exists {
+			if err := value.Decode(content); err != nil {
+				return xerrors.Errorf("failed to decode value: %w", err)
+			}
+			return nil
 		}
-		return nil
 	}
 	content, err := c.cacheServer.Get(cacheKey)
 	if err != nil {
@@ -154,30 +185,27 @@ func (c *LastLevelCache) Update(tx *Tx, tag, key string, value Type, expiration 
 	if addr := cacheKey.Addr(); addr != nil {
 		addrStr = addr.String()
 	}
-	tx.stash.lastLevelCacheKeyToBytes[keyStr] = content
-	tx.pendingQueries[keyStr] = &PendingQuery{
-		QueryLog: &QueryLog{
-			Command: "set",
-			Key:     keyStr,
-			Hash:    cacheKey.Hash(),
-			Type:    server.CacheKeyTypeLLC,
-			Addr:    addrStr,
-		},
-		fn: func() error {
-			casID := uint64(0)
-			if c.opt.optimisticLock {
-				casID = tx.stash.casIDs[keyStr]
-			}
-			if err := c.cacheServer.Set(&server.CacheStoreRequest{
-				Key:        cacheKey,
-				Value:      content,
-				Expiration: expiration,
-				CasID:      casID,
-			}); err != nil {
-				return xerrors.Errorf("failed to set cache to server: %w", err)
-			}
-			return nil
-		},
+	if c.enabledStash(tag) {
+		tx.stash.lastLevelCacheKeyToBytes[keyStr] = content
+		tx.pendingQueries[keyStr] = &PendingQuery{
+			QueryLog: &QueryLog{
+				Command: "set",
+				Key:     keyStr,
+				Hash:    cacheKey.Hash(),
+				Type:    server.CacheKeyTypeLLC,
+				Addr:    addrStr,
+			},
+			fn: func() error {
+				if err := c.set(tx, tag, cacheKey, content, expiration); err != nil {
+					return xerrors.Errorf("failed to set: %w", err)
+				}
+				return nil
+			},
+		}
+		return nil
+	}
+	if err := c.set(tx, tag, cacheKey, content, expiration); err != nil {
+		return xerrors.Errorf("failed to set: %w", err)
 	}
 	return nil
 }
@@ -188,25 +216,33 @@ func (c *LastLevelCache) Delete(tx *Tx, tag, key string) error {
 		return xerrors.Errorf("failed to get cacheKey: %w", err)
 	}
 	keyStr := cacheKey.String()
-	delete(tx.stash.lastLevelCacheKeyToBytes, keyStr)
+	if c.enabledStash(tag) {
+		delete(tx.stash.lastLevelCacheKeyToBytes, keyStr)
+	}
 	var addrStr string
 	if addr := cacheKey.Addr(); addr != nil {
 		addrStr = addr.String()
 	}
-	tx.pendingQueries[keyStr] = &PendingQuery{
-		QueryLog: &QueryLog{
-			Command: "delete",
-			Key:     keyStr,
-			Hash:    cacheKey.Hash(),
-			Type:    server.CacheKeyTypeLLC,
-			Addr:    addrStr,
-		},
-		fn: func() error {
-			if err := c.cacheServer.Delete(cacheKey); err != nil {
-				return xerrors.Errorf("failed to delete cache from server: %w", err)
-			}
-			return nil
-		},
+	if c.enabledStash(tag) {
+		tx.pendingQueries[keyStr] = &PendingQuery{
+			QueryLog: &QueryLog{
+				Command: "delete",
+				Key:     keyStr,
+				Hash:    cacheKey.Hash(),
+				Type:    server.CacheKeyTypeLLC,
+				Addr:    addrStr,
+			},
+			fn: func() error {
+				if err := c.cacheServer.Delete(cacheKey); err != nil {
+					return xerrors.Errorf("failed to delete cache from server: %w", err)
+				}
+				return nil
+			},
+		}
+		return nil
+	}
+	if err := c.cacheServer.Delete(cacheKey); err != nil {
+		return xerrors.Errorf("failed to delete cache from server: %w", err)
 	}
 	return nil
 }

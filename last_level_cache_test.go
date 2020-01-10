@@ -1309,3 +1309,28 @@ func TestLLCCRUD(t *testing.T) {
 		})
 	})
 }
+
+func TestLLC_IgnoreStash(t *testing.T) {
+	tagName := "test_tag"
+	cache, err := New(
+		ServerType(CacheServerTypeMemcached),
+		ServerAddrs([]string{"localhost:11211"}),
+		LastLevelCacheTagIgnoreStash(tagName),
+	)
+	NoError(t, err)
+	NoError(t, cache.Flush())
+	tx, err := cache.Begin()
+	NoError(t, err)
+	NoError(t, tx.CreateWithTag(tagName, "key", Int(1)))
+	var v int
+	NoError(t, tx.FindWithTag(tagName, "key", IntPtr(&v)))
+	if v != 1 {
+		t.Fatal("failed to find with tag")
+	}
+	NoError(t, tx.UpdateWithTag(tagName, "key", Int(2)))
+	NoError(t, tx.FindWithTag(tagName, "key", IntPtr(&v)))
+	if v != 2 {
+		t.Fatal("failed to find with tag")
+	}
+	NoError(t, tx.Commit())
+}
