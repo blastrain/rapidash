@@ -176,7 +176,9 @@ func defaultOption() Option {
 		slcIgnoreNewerCache: true,
 		slcTableOpt:         map[string]TableOption{},
 		llcOpt: &LastLevelCacheOption{
-			tagOpt: map[string]TagOption{},
+			tagOpt:          map[string]TagOption{},
+			optimisticLock:  true,
+			pessimisticLock: true,
 		},
 	}
 }
