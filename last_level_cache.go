@@ -92,6 +92,16 @@ func (c *LastLevelCache) set(tx *Tx, tag string, cacheKey server.CacheKey, conte
 	return nil
 }
 
+func (c *LastLevelCache) existsLockKey(tx *Tx, cacheKey server.CacheKey) bool {
+	key := cacheKey.LockKey().String()
+	for _, lockKey := range tx.lockKeys {
+		if key == lockKey.String() {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *LastLevelCache) Create(tx *Tx, tag, key string, value Type, expiration time.Duration) error {
 	cacheKey, err := c.cacheKey(tag, key)
 	if err != nil {
@@ -106,7 +116,7 @@ func (c *LastLevelCache) Create(tx *Tx, tag, key string, value Type, expiration 
 		tx.stash.lastLevelCacheKeyToBytes[keyStr] = content
 	}
 	if c.opt.pessimisticLock {
-		if _, exists := tx.pendingQueries[keyStr]; !exists {
+		if !c.existsLockKey(tx, cacheKey) {
 			if err := c.lockKey(tx, cacheKey, c.opt.lockExpiration); err != nil {
 				return xerrors.Errorf("failed to lock key: %w", err)
 			}
@@ -175,7 +185,7 @@ func (c *LastLevelCache) Update(tx *Tx, tag, key string, value Type, expiration 
 	}
 	keyStr := cacheKey.String()
 	if c.opt.pessimisticLock {
-		if _, exists := tx.pendingQueries[keyStr]; !exists {
+		if !c.existsLockKey(tx, cacheKey) {
 			if err := c.lockKey(tx, cacheKey, c.opt.lockExpiration); err != nil {
 				return xerrors.Errorf("failed to lock key: %w", err)
 			}
