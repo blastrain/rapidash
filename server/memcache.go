@@ -443,7 +443,7 @@ func scanGetResponseLine(line []byte, it *Item) (size int, err error) {
 			}
 			state = StateCasID
 		case StateCasID:
-			casID, err := strconv.ParseUint(s, 10, 32)
+			casID, err := strconv.ParseUint(s, 10, 64)
 			if err != nil {
 				return size, err
 			}
