@@ -62,11 +62,11 @@ func (d *Postgres) buildDDL(table string, columns []column, primaryKeyDef string
 				continue
 			}
 			if strings.Contains(v, "(") {
-				builder.WriteString(fmt.Sprintf("%s", v))
+				builder.WriteString(v)
 				continue
 			}
 			if strings.Contains(v, ")") {
-				builder.WriteString(fmt.Sprintf("%s", v))
+				builder.WriteString(v)
 				continue
 			}
 		}
