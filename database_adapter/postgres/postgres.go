@@ -26,20 +26,19 @@ func (d *Postgres) TableDDL(conn *sql.DB, table string) (string, error) {
 	return d.buildDDL(table, cols, primaryKeyDef, indexDefs), nil
 }
 
-func (d *Postgres) buildDDL(table string, columns []column, primaryKeyDef string, indexDefs []string) string {
+func (d *Postgres) buildDDL(table string, columns []*column, primaryKeyDef string, indexDefs []string) string {
 	builder := &strings.Builder{}
 	builder.WriteString(fmt.Sprintf("CREATE TABLE public.%s (\n", table))
 	for i, col := range columns {
-		isLast := i == len(columns)-1
 		builder.WriteString(indent)
 		builder.WriteString(fmt.Sprintf("%s %s", col.Name, col.DataType()))
 		if !col.Nullable {
 			builder.WriteString(" NOT NULL")
 		}
-		if isLast && primaryKeyDef == "" && len(indexDefs) == 0 {
-			builder.WriteString("\n")
-		} else {
+		if i < len(columns)-1 || primaryKeyDef != "" || len(indexDefs) > 0 {
 			builder.WriteString(",\n")
+		} else {
+			builder.WriteString("\n")
 		}
 	}
 	if primaryKeyDef != "" {
@@ -80,26 +79,25 @@ func (d *Postgres) buildDDL(table string, columns []column, primaryKeyDef string
 	return builder.String()
 }
 
-func (d *Postgres) getColumns(conn *sql.DB, table string) ([]column, error) {
+func (d *Postgres) getColumns(conn *sql.DB, table string) ([]*column, error) {
 	query := "SELECT column_name, data_type, is_nullable FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name=$1;"
 	rows, err := conn.Query(query, table)
 	if err != nil {
-		fmt.Println(err)
+		return nil, xerrors.Errorf("failed to exec query %s: %w", query, err)
 	}
 	defer rows.Close()
 
-	cols := make([]column, 0)
+	var cols []*column
 	for rows.Next() {
-		col := column{}
 		var colName, nullable, dataType string
-		err = rows.Scan(&colName, &dataType, &nullable)
-		if err != nil {
-			return nil, err
+		if err := rows.Scan(&colName, &dataType, &nullable); err != nil {
+			return nil, xerrors.Errorf("failed to scan index key def: %w", err)
 		}
-		col.Name = strings.Trim(colName, `" `)
-		col.dataType = dataType
-		col.Nullable = nullable == "YES"
-		cols = append(cols, col)
+		cols = append(cols, &column{
+			Name:     strings.Trim(colName, `" `),
+			dataType: dataType,
+			Nullable: nullable == "YES",
+		})
 	}
 	return cols, nil
 }
