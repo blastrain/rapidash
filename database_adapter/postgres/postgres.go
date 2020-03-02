@@ -33,17 +33,8 @@ func (d *Postgres) buildDDL(table string, columns []column, primaryKeyDef string
 		isLast := i == len(columns)-1
 		builder.WriteString(indent)
 		builder.WriteString(fmt.Sprintf("%s %s", col.Name, col.DataType()))
-		if col.Length > 0 {
-			builder.WriteString(fmt.Sprintf("(%d)", col.Length))
-		}
-		if col.IsUnique {
-			builder.WriteString(" UNIQUE")
-		}
 		if !col.Nullable {
 			builder.WriteString(" NOT NULL")
-		}
-		if col.Default != "" && !col.IsAutoIncrement {
-			builder.WriteString(fmt.Sprintf(" DEFAULT %s", col.Default))
 		}
 		if isLast && primaryKeyDef == "" && len(indexDefs) == 0 {
 			builder.WriteString("\n")
@@ -167,14 +158,9 @@ func (d *Postgres) getPrimaryKeyDef(conn *sql.DB, table string) (string, error) 
 }
 
 type column struct {
-	Name            string
-	dataType        string
-	Length          int
-	Nullable        bool
-	Default         string
-	IsPrimaryKey    bool
-	IsAutoIncrement bool
-	IsUnique        bool
+	Name     string
+	dataType string
+	Nullable bool
 }
 
 const (
