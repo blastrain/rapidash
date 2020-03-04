@@ -1,10 +1,10 @@
-package database_adapter
+package database
 
 import (
 	"database/sql"
 
-	"go.knocknote.io/rapidash/database_adapter/mysql"
-	"go.knocknote.io/rapidash/database_adapter/postgres"
+	"go.knocknote.io/rapidash/database/mysql"
+	"go.knocknote.io/rapidash/database/postgres"
 )
 
 type DBType int
