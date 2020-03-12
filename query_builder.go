@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/knocknote/vitess-sqlparser/sqlparser"
+	"go.knocknote.io/rapidash/database"
 	"go.knocknote.io/rapidash/server"
 	"golang.org/x/xerrors"
 )
@@ -529,6 +530,7 @@ func (b *QueryBuilder) AvailableIndex() bool {
 }
 
 type QueryBuilder struct {
+	adapter         database.Adapter
 	tableName       string
 	conditions      *Conditions
 	inCondition     *INCondition
@@ -632,9 +634,11 @@ func (b *QueryBuilder) UpdateSQL(updateMap map[string]interface{}) (string, []in
 	}
 	setList := []string{}
 	values := []interface{}{}
+	i := 1
 	for k, v := range updateMap {
-		setList = append(setList, fmt.Sprintf("`%s` = ?", k))
+		setList = append(setList, fmt.Sprintf("`%s` = %s", k, b.adapter.Placeholder(i)))
 		values = append(values, v)
+		i++
 	}
 	values = append(values, args...)
 	return fmt.Sprintf("UPDATE `%s` SET %s WHERE %s", b.tableName, strings.Join(setList, ","), strings.Join(where, " AND ")), values
@@ -937,6 +941,7 @@ func (b *QueryBuilder) IsUnsupportedCacheQuery() bool {
 }
 
 type EQCondition struct {
+	adapter  database.Adapter
 	column   string
 	rawValue interface{}
 	value    *Value
@@ -992,6 +997,7 @@ func (c *EQCondition) Release() {
 }
 
 type NEQCondition struct {
+	adapter  database.Adapter
 	column   string
 	rawValue interface{}
 	value    *Value
@@ -1044,6 +1050,7 @@ func (c *NEQCondition) Release() {
 }
 
 type GTCondition struct {
+	adapter  database.Adapter
 	column   string
 	rawValue interface{}
 	value    *Value
@@ -1089,6 +1096,7 @@ func (c *GTCondition) Release() {
 }
 
 type GTECondition struct {
+	adapter  database.Adapter
 	column   string
 	rawValue interface{}
 	value    *Value
@@ -1134,6 +1142,7 @@ func (c *GTECondition) Release() {
 }
 
 type LTCondition struct {
+	adapter  database.Adapter
 	column   string
 	rawValue interface{}
 	value    *Value
@@ -1148,7 +1157,7 @@ func (c *LTCondition) Value() *Value {
 }
 
 func (c *LTCondition) Query() string {
-	return fmt.Sprintf("`%s` < ?", c.column)
+	return fmt.Sprintf("`%s` < %s", c.column, c.adapter.Placeholder(1))
 }
 
 func (c *LTCondition) QueryArgs() []interface{} {
@@ -1179,6 +1188,7 @@ func (c *LTCondition) Release() {
 }
 
 type LTECondition struct {
+	adapter  database.Adapter
 	column   string
 	rawValue interface{}
 	value    *Value
@@ -1193,7 +1203,7 @@ func (c *LTECondition) Value() *Value {
 }
 
 func (c *LTECondition) Query() string {
-	return fmt.Sprintf("`%s` <= ?", c.column)
+	return fmt.Sprintf("`%s` <= %s", c.column, c.adapter.Placeholder(1))
 }
 
 func (c *LTECondition) QueryArgs() []interface{} {
@@ -1224,6 +1234,7 @@ func (c *LTECondition) Release() {
 }
 
 type INCondition struct {
+	adapter   database.Adapter
 	column    string
 	rawValues interface{}
 	values    []*Value
@@ -1238,11 +1249,7 @@ func (c *INCondition) Value() *Value {
 }
 
 func (c *INCondition) Query() string {
-	placeholders := make([]string, len(c.values))
-	for i := 0; i < len(c.values); i++ {
-		placeholders[i] = "?"
-	}
-	return fmt.Sprintf("`%s` IN (%s)", c.column, strings.Join(placeholders, ","))
+	return fmt.Sprintf("`%s` IN (%s)", c.column, c.adapter.Placeholders(len(c.values)))
 }
 
 func (c *INCondition) QueryArgs() []interface{} {
