@@ -22,6 +22,10 @@ func (d *Decoder) Reader() Reader {
 	return d.src
 }
 
+func (d *Decoder) Reset(r io.Reader) {
+	d.raw.Reset(r)
+}
+
 func (d *Decoder) ReadCode() (Code, error) {
 	b, err := d.raw.ReadByte()
 	if err != nil {
