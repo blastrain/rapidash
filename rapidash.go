@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"go.knocknote.io/rapidash/database"
 	"go.knocknote.io/rapidash/server"
 	"golang.org/x/xerrors"
 )
@@ -137,6 +138,7 @@ type QueryLog struct {
 }
 
 type Option struct {
+	adapter                    database.Adapter
 	serverType                 CacheServerType
 	serverAddrs                []string
 	timeout                    time.Duration
@@ -162,6 +164,7 @@ type Option struct {
 
 func defaultOption() Option {
 	return Option{
+		adapter:             database.NewDBAdapter(),
 		serverType:          CacheServerTypeMemcached,
 		timeout:             DefaultTimeout,
 		maxIdleConnections:  DefaultMaxIdleConns,
@@ -844,7 +847,7 @@ func (r *Rapidash) WarmUp(conn *sql.DB, typ *Struct, isReadOnly bool) error {
 }
 
 func (r *Rapidash) WarmUpFirstLevelCache(conn *sql.DB, typ *Struct) error {
-	flc := NewFirstLevelCache(typ)
+	flc := NewFirstLevelCache(typ, r.opt.adapter)
 	if err := flc.WarmUp(conn); err != nil {
 		return xerrors.Errorf("cannot warm up FirstLevelCache. table is %s: %w", typ.tableName, err)
 	}
@@ -870,7 +873,7 @@ func (r *Rapidash) tableOption(tableName string) TableOption {
 }
 
 func (r *Rapidash) WarmUpSecondLevelCache(conn *sql.DB, typ *Struct) error {
-	slc := NewSecondLevelCache(typ, r.cacheServer, r.tableOption(typ.tableName))
+	slc := NewSecondLevelCache(typ, r.cacheServer, r.tableOption(typ.tableName), r.opt.adapter)
 	if err := slc.WarmUp(conn); err != nil {
 		return xerrors.Errorf("cannot warm up SecondLevelCache. table is %s: %w", typ.tableName, err)
 	}
@@ -1026,5 +1029,9 @@ func New(opts ...OptionFunc) (*Rapidash, error) {
 		return nil, xerrors.Errorf("failed to set server: %w", err)
 	}
 	r.setLogger()
+
+	if r.opt.adapter == nil {
+		return nil, xerrors.Errorf("adapter not setup. must pass database adapter option")
+	}
 	return r, nil
 }

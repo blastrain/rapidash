@@ -11,6 +11,7 @@ import (
 
 	"github.com/knocknote/vitess-sqlparser/sqlparser"
 	"github.com/lestrrat-go/msgpack"
+	"go.knocknote.io/rapidash/database"
 	"go.knocknote.io/rapidash/server"
 	"golang.org/x/xerrors"
 )
@@ -45,6 +46,7 @@ type SecondLevelCache struct {
 	valueDecoderPool      sync.Pool
 	primaryKeyDecoderPool sync.Pool
 	valueFactory          *ValueFactory
+	adapter               database.Adapter
 }
 
 type TxValue struct {
@@ -91,7 +93,7 @@ func (v *TxValue) EncodeLog() string {
 	return v.String()
 }
 
-func NewSecondLevelCache(s *Struct, server server.CacheServer, opt TableOption) *SecondLevelCache {
+func NewSecondLevelCache(s *Struct, server server.CacheServer, opt TableOption, adapter database.Adapter) *SecondLevelCache {
 	valueFactory := NewValueFactory()
 	return &SecondLevelCache{
 		typ:          s,
@@ -110,6 +112,7 @@ func NewSecondLevelCache(s *Struct, server server.CacheServer, opt TableOption) 
 			},
 		},
 		valueFactory: valueFactory,
+		adapter:      adapter,
 	}
 }
 
@@ -152,12 +155,9 @@ func (c *SecondLevelCache) WarmUp(conn *sql.DB) error {
 }
 
 func (c *SecondLevelCache) showCreateTable(conn *sql.DB) (string, error) {
-	var (
-		tbl string
-		ddl string
-	)
-	if err := conn.QueryRow(fmt.Sprintf("SHOW CREATE TABLE `%s`", c.typ.tableName)).Scan(&tbl, &ddl); err != nil {
-		return "", xerrors.Errorf("failed to execute 'SHOW CREATE TABLE `%s`': %w", c.typ.tableName, err)
+	ddl, err := c.adapter.TableDDL(conn, c.typ.tableName)
+	if err != nil {
+		return "", xerrors.Errorf("failed to get ddl for %s: %w", c.typ.tableName)
 	}
 	return ddl, nil
 }
@@ -176,7 +176,7 @@ func (c *SecondLevelCache) setupPrimaryKey(constraint *sqlparser.Constraint) {
 	}
 	primaryKey := strings.Join(columns, ":")
 	for idx := range columns {
-		subColumns := columns[:idx+1:idx+1]
+		subColumns := columns[: idx+1 : idx+1]
 		if len(subColumns) == 0 {
 			continue
 		}
@@ -1169,9 +1169,9 @@ func (c *SecondLevelCache) insertSQL(value *StructValue) (string, []interface{})
 	escapedColumns := []string{}
 	placeholders := []string{}
 	values := []interface{}{}
-	for _, column := range value.typ.Columns() {
+	for idx, column := range value.typ.Columns() {
 		escapedColumns = append(escapedColumns, fmt.Sprintf("`%s`", column))
-		placeholders = append(placeholders, "?")
+		placeholders = append(placeholders, c.adapter.Placeholder(idx+1))
 		if value.fields[column] == nil {
 			values = append(values, nil)
 		} else {
