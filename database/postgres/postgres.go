@@ -10,23 +10,36 @@ import (
 
 type Postgres struct{}
 
-func (d *Postgres) TableDDL(conn *sql.DB, table string) (string, error) {
-	cols, err := d.getColumns(conn, table)
+func (p *Postgres) Placeholder(idx int) string {
+	return fmt.Sprintf("$%d", idx+1)
+}
+
+func (p *Postgres) Placeholders(length int) string {
+	sb := &strings.Builder{}
+	sb.Grow(len(p.Placeholder(length)) * length)
+	for i := 0; i < length; i++ {
+		sb.WriteString(p.Placeholder(i + 1))
+	}
+	return sb.String()
+}
+
+func (p *Postgres) TableDDL(conn *sql.DB, table string) (string, error) {
+	cols, err := p.getColumns(conn, table)
 	if err != nil {
 		return "", xerrors.Errorf("failed to get columns: %w", err)
 	}
-	primaryKeyDef, err := d.getPrimaryKeyDef(conn, table)
+	primaryKeyDef, err := p.getPrimaryKeyDef(conn, table)
 	if err != nil {
 		return "", xerrors.Errorf("failed to get primary key def: %w", err)
 	}
-	indexDefs, err := d.getIndexDefs(conn, table)
+	indexDefs, err := p.getIndexDefs(conn, table)
 	if err != nil {
 		return "", xerrors.Errorf("failed to get index defs: %w", err)
 	}
-	return d.buildDDL(table, cols, primaryKeyDef, indexDefs), nil
+	return p.buildDDL(table, cols, primaryKeyDef, indexDefs), nil
 }
 
-func (d *Postgres) buildDDL(table string, columns []*column, primaryKeyDef string, indexDefs []string) string {
+func (p *Postgres) buildDDL(table string, columns []*column, primaryKeyDef string, indexDefs []string) string {
 	builder := &strings.Builder{}
 	builder.WriteString(fmt.Sprintf("CREATE TABLE public.%s (\n", table))
 	for i, col := range columns {
@@ -79,7 +92,7 @@ func (d *Postgres) buildDDL(table string, columns []*column, primaryKeyDef strin
 	return builder.String()
 }
 
-func (d *Postgres) getColumns(conn *sql.DB, table string) ([]*column, error) {
+func (p *Postgres) getColumns(conn *sql.DB, table string) ([]*column, error) {
 	query := "SELECT column_name, data_type, is_nullable FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name=$1;"
 	rows, err := conn.Query(query, table)
 	if err != nil {
@@ -102,7 +115,7 @@ func (d *Postgres) getColumns(conn *sql.DB, table string) ([]*column, error) {
 	return cols, nil
 }
 
-func (d *Postgres) getIndexDefs(conn *sql.DB, table string) ([]string, error) {
+func (p *Postgres) getIndexDefs(conn *sql.DB, table string) ([]string, error) {
 	query := "SELECT indexName, indexdef FROM pg_indexes WHERE tablename=$1"
 	rows, err := conn.Query(query, table)
 	if err != nil {
@@ -128,7 +141,7 @@ func (d *Postgres) getIndexDefs(conn *sql.DB, table string) ([]string, error) {
 	return indexes, nil
 }
 
-func (d *Postgres) getPrimaryKeyDef(conn *sql.DB, table string) (string, error) {
+func (p *Postgres) getPrimaryKeyDef(conn *sql.DB, table string) (string, error) {
 	query := `SELECT kcu.column_name FROM information_schema.table_constraints AS tc
 	JOIN information_schema.key_column_usage AS kcu ON tc.constraint_name = kcu.constraint_name
 	WHERE constraint_type = 'PRIMARY KEY' AND tc.table_name=$1`

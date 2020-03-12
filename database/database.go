@@ -10,7 +10,8 @@ import (
 type DBType int
 
 const (
-	MySQL DBType = iota
+	None DBType = iota
+	MySQL
 	Postgres
 )
 
@@ -21,6 +22,12 @@ const (
 
 type Adapter interface {
 	TableDDL(*sql.DB, string) (string, error)
+	Placeholder(int) string
+	Placeholders(int) string
+}
+
+type SQLValueGetter interface {
+
 }
 
 func NewDBAdapter() Adapter {
@@ -48,5 +55,5 @@ func toDBType(pluginName string) DBType {
 	case postgresPlugin:
 		return Postgres
 	}
-	return 0
+	return None
 }

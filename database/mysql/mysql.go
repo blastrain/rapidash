@@ -3,6 +3,7 @@ package mysql
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"golang.org/x/xerrors"
 )
@@ -18,4 +19,17 @@ func (ms *MySQL) TableDDL(conn *sql.DB, tableName string) (string, error) {
 		return "", xerrors.Errorf("failed to execute 'SHOW CREATE TABLE `%s`': %w", tableName, err)
 	}
 	return ddl, nil
+}
+
+func (ms *MySQL) Placeholder(_ int) string {
+	return "?"
+}
+
+func (ms *MySQL) Placeholders(length int) string {
+	sb := &strings.Builder{}
+	sb.Grow(len(ms.Placeholder(0)) * length)
+	for i := 0; i < length; i++ {
+		sb.WriteString(ms.Placeholder(0))
+	}
+	return sb.String()
 }
