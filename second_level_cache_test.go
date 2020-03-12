@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"go.knocknote.io/rapidash/database"
+
 	"go.knocknote.io/rapidash/server"
 	"golang.org/x/xerrors"
 )
@@ -223,7 +225,7 @@ func TestSimpleRead(t *testing.T) {
 func testSimpleRead(t *testing.T, typ CacheServerType) {
 	NoError(t, initCache(conn, typ))
 	userLogin := defaultUserLogin()
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 	NoError(t, slc.cacheServer.Flush())
 	NoError(t, slc.WarmUp(conn))
 
@@ -402,7 +404,7 @@ func testSimpleReadWithPessimisticLock(t *testing.T, typ CacheServerType) {
 		pessimisticLock: &pessimisticLock,
 		lockExpiration:  &lockExpiration,
 		expiration:      &expiration,
-	})
+	}, database.NewAdapterWithDBType(database.MySQL))
 	NoError(t, slc.cacheServer.Flush())
 	NoError(t, slc.WarmUp(conn))
 
@@ -439,7 +441,7 @@ func testSimpleCreate(t *testing.T, typ CacheServerType) {
 	NoError(t, initUserLoginTable(conn))
 	NoError(t, initCache(conn, typ))
 	userLogin := defaultUserLogin()
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 	NoError(t, slc.cacheServer.Flush())
 	NoError(t, slc.WarmUp(conn))
 
@@ -478,7 +480,7 @@ func TestSimpleUpdate(t *testing.T) {
 func testSimpleUpdate(t *testing.T, typ CacheServerType) {
 	NoError(t, initUserLoginTable(conn))
 	NoError(t, initCache(conn, typ))
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 	NoError(t, slc.WarmUp(conn))
 
 	txConn, err := conn.Begin()
@@ -514,7 +516,7 @@ func testSimpleDelete(t *testing.T, typ CacheServerType) {
 	NoError(t, initCache(conn, typ))
 
 	userLogin := defaultUserLogin()
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 	NoError(t, slc.WarmUp(conn))
 
 	txConn, err := conn.Begin()
@@ -544,7 +546,7 @@ func testCreateWithoutCache(t *testing.T, typ CacheServerType) {
 	NoError(t, initCache(conn, typ))
 
 	userLogin := defaultUserLogin()
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 	NoError(t, slc.cacheServer.Flush())
 	NoError(t, slc.WarmUp(conn))
 
@@ -583,7 +585,7 @@ func TestQueryBuilder(t *testing.T) {
 func testQueryBuilder(t *testing.T, typ CacheServerType) {
 	t.Run("WHERE IN AND EQ query", func(t *testing.T) {
 		NoError(t, initCache(conn, typ))
-		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 		NoError(t, slc.WarmUp(conn))
 		builder := NewQueryBuilder("user_logins").
 			In("user_id", []uint64{1, 2, 3, 4, 5}).
@@ -601,7 +603,7 @@ func testQueryBuilder(t *testing.T, typ CacheServerType) {
 
 	t.Run("IS NULL query", func(t *testing.T) {
 		NoError(t, initCache(conn, typ))
-		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 		NoError(t, slc.WarmUp(conn))
 
 		builder := NewQueryBuilder("user_logins").
@@ -630,7 +632,7 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 	t.Run("find by index column query builder", func(t *testing.T) {
 		NoError(t, initUserLoginTable(conn))
 		NoError(t, initCache(conn, typ))
-		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 		NoError(t, slc.cacheServer.Flush())
 		NoError(t, slc.WarmUp(conn))
 
@@ -690,7 +692,7 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 	t.Run("cache miss query, find from db", func(t *testing.T) {
 		NoError(t, initUserLoginTable(conn))
 		NoError(t, initCache(conn, typ))
-		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 		NoError(t, slc.cacheServer.Flush())
 		NoError(t, slc.WarmUp(conn))
 
@@ -713,7 +715,7 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 	t.Run("partially found pk and value in cache with uq key", func(t *testing.T) {
 		NoError(t, initUserLoginTable(conn))
 		NoError(t, initCache(conn, typ))
-		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 		NoError(t, slc.WarmUp(conn))
 		{
 			txConn, err := conn.Begin()
@@ -742,7 +744,7 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 	t.Run("partially found pk and value in cache with idx key", func(t *testing.T) {
 		NoError(t, initUserLoginTable(conn))
 		NoError(t, initCache(conn, typ))
-		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 		NoError(t, slc.WarmUp(conn))
 		{
 			txConn, err := conn.Begin()
@@ -829,7 +831,7 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 	t.Run("find after updated index column value in same tx", func(t *testing.T) {
 		NoError(t, initUserLoginTable(conn))
 		NoError(t, initCache(conn, typ))
-		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 		NoError(t, slc.cacheServer.Flush())
 		NoError(t, slc.WarmUp(conn))
 
@@ -892,7 +894,7 @@ func testUpdateByQueryBuilder(t *testing.T, typ CacheServerType) {
 	NoError(t, initUserLoginTable(conn))
 	NoError(t, initCache(conn, typ))
 	s := "user_id"
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{shardKey: &s})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{shardKey: &s}, database.NewAdapterWithDBType(database.MySQL))
 	NoError(t, slc.WarmUp(conn))
 
 	fmt.Println("AAAA", slc.opt)
@@ -982,7 +984,7 @@ func TestUpdateUniqueKeyColumn(t *testing.T) {
 func testUpdateUniqueKeyColumn(t *testing.T, typ CacheServerType) {
 	NoError(t, initUserLoginTable(conn))
 	NoError(t, initCache(conn, typ))
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 	NoError(t, slc.cacheServer.Flush())
 	NoError(t, slc.WarmUp(conn))
 
@@ -1019,7 +1021,7 @@ func TestUpdateKeyColumn(t *testing.T) {
 func testUpdateKeyColumn(t *testing.T, typ CacheServerType) {
 	NoError(t, initUserLoginTable(conn))
 	NoError(t, initCache(conn, typ))
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 	NoError(t, slc.cacheServer.Flush())
 	NoError(t, slc.WarmUp(conn))
 	builder := NewQueryBuilder("user_logins").
@@ -1049,7 +1051,7 @@ func testUpdateKeyColumn(t *testing.T, typ CacheServerType) {
 func TestUniqueIndexColumnUpdateByPrimaryKey(t *testing.T) {
 	NoError(t, initUserLoginTable(conn))
 	NoError(t, initCache(conn, CacheServerTypeMemcached))
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 	NoError(t, slc.cacheServer.Flush())
 	NoError(t, slc.WarmUp(conn))
 
@@ -1138,7 +1140,7 @@ func TestUniqueIndexColumnUpdateByPrimaryKey(t *testing.T) {
 func TestIndexColumnUpdateByPrimaryKey(t *testing.T) {
 	NoError(t, initUserLoginTable(conn))
 	NoError(t, initCache(conn, CacheServerTypeMemcached))
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 	NoError(t, slc.cacheServer.Flush())
 	NoError(t, slc.WarmUp(conn))
 
@@ -1227,7 +1229,7 @@ func TestIndexColumnUpdateByPrimaryKey(t *testing.T) {
 func TestLockingRead(t *testing.T) {
 	NoError(t, initUserLoginTable(conn))
 	NoError(t, initCache(conn, CacheServerTypeMemcached))
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 	NoError(t, slc.cacheServer.Flush())
 	NoError(t, slc.WarmUp(conn))
 
@@ -1291,7 +1293,7 @@ func TestDeleteByQueryBuilder(t *testing.T) {
 
 func testDeleteByQueryBuilder(t *testing.T, typ CacheServerType) {
 	NoError(t, initCache(conn, typ))
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 	NoError(t, slc.WarmUp(conn))
 	t.Run("cache is available", func(t *testing.T) {
 		NoError(t, initUserLoginTable(conn))
@@ -1357,7 +1359,7 @@ func TestRawQuery(t *testing.T) {
 func testRawQuery(t *testing.T, typ CacheServerType) {
 	NoError(t, initUserLoginTable(conn))
 	NoError(t, initCache(conn, typ))
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 	NoError(t, slc.WarmUp(conn))
 
 	txConn, err := conn.Begin()
@@ -1575,7 +1577,7 @@ func validateNotNilValue(t *testing.T, v *PtrType) {
 
 func TestPointerType(t *testing.T) {
 	NoError(t, initCache(conn, CacheServerTypeMemcached))
-	slc := NewSecondLevelCache(new(PtrType).Type(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(new(PtrType).Type(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 	NoError(t, slc.WarmUp(conn))
 
 	t.Run("invalid value", func(t *testing.T) {
@@ -1838,7 +1840,7 @@ func BenchmarkSLCIN_SimpleMemcachedAccess(b *testing.B) {
 		panic(err)
 	}
 	setNopLogger()
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 	if err := slc.WarmUp(conn); err != nil {
 		panic(err)
 	}
@@ -1884,7 +1886,7 @@ func BenchmarkSLCIN_SimpleRedisAccess(b *testing.B) {
 		panic(err)
 	}
 	setNopLogger()
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 	if err := slc.WarmUp(conn); err != nil {
 		panic(err)
 	}
@@ -1986,7 +1988,7 @@ func benchmarkSLCINRapidash(b *testing.B) {
 		panic(err)
 	}
 	setNopLogger()
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 	if err := slc.WarmUp(conn); err != nil {
 		panic(err)
 	}
@@ -2015,7 +2017,7 @@ func benchmarkSLCINRapidash(b *testing.B) {
 }
 
 func TestCountQuerySLC(t *testing.T) {
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 	NoError(t, slc.WarmUp(conn))
 	builder := NewQueryBuilder("user_logins").
 		Eq("user_id", uint64(1))
@@ -2031,7 +2033,7 @@ func TestCountQuerySLC(t *testing.T) {
 }
 
 func TestCountByQueryBuilderCaseDatabaseRecordIsEmptySLC(t *testing.T) {
-	slc := NewSecondLevelCache(emptyType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(emptyType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 	NoError(t, slc.WarmUp(conn))
 	builder := NewQueryBuilder("empties").Eq("id", uint64(1))
 	tx, err := cache.Begin(conn)
@@ -2070,7 +2072,7 @@ func TestWarmUp(t *testing.T) {
 	NoError(t, err)
 
 	t.Run("only a single pk", func(t *testing.T) {
-		slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{})
+		slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 		NoError(t, slc.WarmUp(conn))
 
 		Equal(t, len(slc.indexes), 1)
@@ -2082,7 +2084,7 @@ func TestWarmUp(t *testing.T) {
 
 		t.Run("with shard_key", func(t *testing.T) {
 			shardKey := "user_id"
-			slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{shardKey: &shardKey})
+			slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{shardKey: &shardKey}, database.NewAdapterWithDBType(database.MySQL))
 			NoError(t, slc.WarmUp(conn))
 
 			Equal(t, len(slc.indexes), 1)
@@ -2098,7 +2100,7 @@ func TestWarmUp(t *testing.T) {
 	t.Run("pk multiple pair", func(t *testing.T) {
 		_, err := conn.Exec("ALTER TABLE warm_up_users DROP PRIMARY KEY, ADD PRIMARY KEY (id, created_at)")
 		NoError(t, err)
-		slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{})
+		slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 		NoError(t, slc.WarmUp(conn))
 		Equal(t, len(slc.indexes), 2)
 		{
@@ -2119,7 +2121,7 @@ func TestWarmUp(t *testing.T) {
 
 		t.Run("with shard_key", func(t *testing.T) {
 			shardKey := "user_id"
-			slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{shardKey: &shardKey})
+			slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{shardKey: &shardKey}, database.NewAdapterWithDBType(database.MySQL))
 			NoError(t, slc.WarmUp(conn))
 
 			Equal(t, len(slc.indexes), 2)
@@ -2146,7 +2148,7 @@ func TestWarmUp(t *testing.T) {
 	t.Run("index key", func(t *testing.T) {
 		_, err := conn.Exec("ALTER TABLE warm_up_users DROP PRIMARY KEY, ADD PRIMARY KEY (id), ADD INDEX idx_user_id_nickname(user_id, nickname)")
 		NoError(t, err)
-		slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{})
+		slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 		NoError(t, slc.WarmUp(conn))
 		Equal(t, len(slc.indexes), 3)
 		{
@@ -2176,7 +2178,7 @@ func TestWarmUp(t *testing.T) {
 	t.Run("unique key", func(t *testing.T) {
 		_, err := conn.Exec("ALTER TABLE warm_up_users DROP INDEX idx_user_id_nickname, ADD UNIQUE uq_user_id_nickname(user_id, nickname)")
 		NoError(t, err)
-		slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{})
+		slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 		NoError(t, slc.WarmUp(conn))
 		Equal(t, len(slc.indexes), 3)
 		{
