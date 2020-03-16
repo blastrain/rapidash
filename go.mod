@@ -2,6 +2,8 @@ module go.knocknote.io/rapidash
 
 go 1.12
 
+replace github.com/lestrrat-go/msgpack => ./vendor/github.com/knocknote/msgpack
+
 require (
 	github.com/go-sql-driver/mysql v1.4.1
 	github.com/gomodule/redigo v2.0.0+incompatible
@@ -12,7 +14,7 @@ require (
 	github.com/juju/testing v0.0.0-20190418112600-6570bd8f8541 // indirect
 	github.com/knocknote/vitess-sqlparser v0.0.0-20181121014348-1003c43917a3
 	github.com/kr/pretty v0.1.0 // indirect
-	github.com/lestrrat-go/msgpack v0.0.0-20191118094803-f1541f70f50e
+	github.com/lestrrat-go/msgpack v0.0.0-00010101000000-000000000000
 	github.com/rakyll/statik v0.1.6
 	github.com/rs/xid v0.0.0-20180316063648-705291fb2231
 	github.com/rs/zerolog v1.13.0
