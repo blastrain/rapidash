@@ -2,7 +2,7 @@ module go.knocknote.io/rapidash
 
 go 1.12
 
-replace github.com/lestrrat-go/msgpack => ./vendor/github.com/knocknote/msgpack
+replace github.com/lestrrat-go/msgpack => go.knocknote.io/rapidash/vendor/github.com/knocknote/msgpack v0.0.0-20200316040259-f991f642f3bd
 
 require (
 	github.com/go-sql-driver/mysql v1.4.1
