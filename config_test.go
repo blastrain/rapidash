@@ -64,4 +64,116 @@ func TestConfig(t *testing.T) {
 			t.Fatal("cannot work set/get with tag")
 		}
 	})
+
+	t.Run("llc tags", func(t *testing.T) {
+		t.Run("cache control", func(t *testing.T) {
+			t.Run("with single transaction", func(t *testing.T) {
+				t.Run("should retrieve last created value with explicit no cache control", func(t *testing.T) {
+					key := fmt.Sprintf("key_%d", time.Now().UnixNano())
+					var result int
+					expect := 2
+
+					tx, err := cache.Begin()
+					NoError(t, err)
+
+					NoError(t, tx.CreateWithTag("cache_control_no_lock", key, Int(1)))
+					NoError(t, tx.CreateWithTag("cache_control_no_lock", key, Int(expect)))
+					NoError(t, tx.FindWithTag("cache_control_no_lock", key, IntPtr(&result)))
+
+					Equalf(t, result, expect, "should retrieve last created value")
+				})
+
+				t.Run("should retrieve last created value with explicit lock", func(t *testing.T) {
+					key := fmt.Sprintf("key_%d", time.Now().UnixNano())
+					var result int
+					expect := 2
+
+					tx, err := cache.Begin()
+					NoError(t, err)
+					NoError(t, tx.CreateWithTag("cache_control_lock", key, Int(1)))
+					NoError(t, tx.CreateWithTag("cache_control_lock", key, Int(expect)))
+					NoError(t, tx.FindWithTag("cache_control_lock", key, IntPtr(&result)))
+
+					Equalf(t, result, expect, "should retrieve last created value")
+				})
+
+				t.Run("should retrieve last created value with implicit cache control", func(t *testing.T) {
+					key := fmt.Sprintf("key_%d", time.Now().UnixNano())
+					var result int
+					expect := 2
+
+					tx, err := cache.Begin()
+					NoError(t, err)
+
+					NoError(t, err)
+					NoError(t, tx.CreateWithTag("cache_control_implicit", key, Int(1)))
+					NoError(t, tx.CreateWithTag("cache_control_implicit", key, Int(expect)))
+					NoError(t, tx.FindWithTag("cache_control_implicit", key, IntPtr(&result)))
+
+					Equalf(t, result, expect, "should retrieve last created value")
+				})
+			})
+
+			t.Run("with multiple transaction that handles exact same key", func(t *testing.T) {
+				t.Run("should retrieve each handled data with explicit no lock", func(t *testing.T) {
+					key := fmt.Sprintf("key_%d", time.Now().UnixNano())
+					var resultFirst  int
+					var resultSecond int
+					expectFirst := 1
+					expectSecond := 2
+
+					txFirst, err := cache.Begin()
+					NoError(t, err)
+
+					txSecond, err := cache.Begin()
+					NoError(t, err)
+
+					NoError(t, txFirst.CreateWithTag("cache_control_no_lock", key, Int(expectFirst)))
+					NoError(t, txSecond.CreateWithTag("cache_control_no_lock", key, Int(expectSecond)))
+
+					NoError(t, txFirst.FindWithTag("cache_control_no_lock", key, IntPtr(&resultFirst)))
+					NoError(t, txSecond.FindWithTag("cache_control_no_lock", key, IntPtr(&resultSecond)))
+
+					Equalf(t, resultFirst, expectFirst, "should retrieve each handled data")
+					Equalf(t, resultSecond, expectSecond, "should retrieve each handled data")
+				})
+
+				t.Run("should occur error on second create with explicit lock", func(t *testing.T) {
+					key := fmt.Sprintf("key_%d", time.Now().UnixNano())
+
+					txFirst, err := cache.Begin()
+					NoError(t, err)
+
+					txSecond, err := cache.Begin()
+					NoError(t, err)
+
+					NoError(t, txFirst.CreateWithTag("cache_control_lock", key, Int(1)))
+					Errorf(t, txSecond.CreateWithTag("cache_control_lock", key, Int(2)), "should occur error on second create")
+				})
+
+				t.Run("should retrieve each handled data with implicit cache control", func(t *testing.T) {
+					key := fmt.Sprintf("key_%d", time.Now().UnixNano())
+					var resultFirst  int
+					var resultSecond int
+					expectFirst := 1
+					expectSecond := 2
+
+					txFirst, err := cache.Begin()
+					NoError(t, err)
+
+					txSecond, err := cache.Begin()
+					NoError(t, err)
+
+					NoError(t, txFirst.CreateWithTag("cache_control_implicit", key, Int(expectFirst)))
+					NoError(t, txSecond.CreateWithTag("cache_control_implicit", key, Int(expectSecond)))
+
+					NoError(t, txFirst.FindWithTag("cache_control_implicit", key, IntPtr(&resultFirst)))
+					NoError(t, txSecond.FindWithTag("cache_control_implicit", key, IntPtr(&resultSecond)))
+
+					Equalf(t, resultFirst, expectFirst, "should retrieve each handled data")
+					Equalf(t, resultSecond, expectSecond, "should retrieve each handled data")
+				})
+			})
+		})
+	})
 }

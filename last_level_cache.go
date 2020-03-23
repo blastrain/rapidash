@@ -76,9 +76,24 @@ func (c *LastLevelCache) enabledStash(tag string) bool {
 	return !opt.ignoreStash
 }
 
+func (c *LastLevelCache) shouldPessimisticLock(tag string) bool {
+	opt, exists := c.opt.tagOpt[tag];
+	if !exists {
+		return c.opt.pessimisticLock
+	}
+	return opt.pessimisticLock
+}
+func (c *LastLevelCache) shouldOptimisticLock(tag string) bool {
+	opt, exists := c.opt.tagOpt[tag];
+	if !exists {
+		return c.opt.optimisticLock
+	}
+	return opt.optimisticLock
+}
+
 func (c *LastLevelCache) set(tx *Tx, tag string, cacheKey server.CacheKey, content []byte, expiration time.Duration) error {
 	casID := uint64(0)
-	if c.opt.optimisticLock {
+	if c.shouldOptimisticLock(tag) {
 		casID = tx.stash.casIDs[cacheKey.String()]
 	}
 	if err := c.cacheServer.Set(&server.CacheStoreRequest{
@@ -115,7 +130,7 @@ func (c *LastLevelCache) Create(tx *Tx, tag, key string, value Type, expiration 
 	if c.enabledStash(tag) {
 		tx.stash.lastLevelCacheKeyToBytes[keyStr] = content
 	}
-	if c.opt.pessimisticLock {
+	if c.shouldPessimisticLock(tag) {
 		if !c.existsLockKey(tx, cacheKey) {
 			if err := c.lockKey(tx, cacheKey, c.opt.lockExpiration); err != nil {
 				return xerrors.Errorf("failed to lock key: %w", err)
@@ -184,7 +199,8 @@ func (c *LastLevelCache) Update(tx *Tx, tag, key string, value Type, expiration 
 		return xerrors.Errorf("failed to get cacheKey: %w", err)
 	}
 	keyStr := cacheKey.String()
-	if c.opt.pessimisticLock {
+
+	if c.shouldPessimisticLock(tag) {
 		if !c.existsLockKey(tx, cacheKey) {
 			if err := c.lockKey(tx, cacheKey, c.opt.lockExpiration); err != nil {
 				return xerrors.Errorf("failed to lock key: %w", err)
