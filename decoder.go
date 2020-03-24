@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"time"
 
-	"github.com/lestrrat-go/msgpack"
+	"github.com/knocknote/msgpack"
 	"golang.org/x/xerrors"
 )
 
@@ -71,7 +71,7 @@ type PrimaryKeyDecoder struct {
 func (d *PrimaryKeyDecoder) SetBuffer(content []byte) {
 	d.buf.Reset()
 	d.buf.Write(content)
-	d.dec.Reset(d.buf)
+	d.dec.SetReader(d.buf)
 }
 
 func (d *PrimaryKeyDecoder) Decode() (string, error) {
@@ -229,7 +229,7 @@ func NewDecoder(s *Struct, buf *bytes.Buffer, valueFactory *ValueFactory) *Value
 func (d *ValueDecoder) SetBuffer(content []byte) {
 	d.buf.Reset()
 	d.buf.Write(content)
-	d.dec.Reset(d.buf)
+	d.dec.SetReader(d.buf)
 }
 
 func (d *ValueDecoder) decodeStructValue(field *StructField) (*Value, error) {

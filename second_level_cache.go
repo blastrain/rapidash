@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/knocknote/vitess-sqlparser/sqlparser"
-	"github.com/lestrrat-go/msgpack"
+	"github.com/knocknote/msgpack"
 	"go.knocknote.io/rapidash/server"
 	"golang.org/x/xerrors"
 )
