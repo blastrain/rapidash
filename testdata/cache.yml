@@ -36,6 +36,18 @@ llc:
       server: localhost:11211
       lock_expiration: 90
       expiration: 0
+    cache_control_no_lock:
+      server: localhost:11211
+      cache_control:
+        optimistic_lock: false
+        pessimistic_lock: false
+    cache_control_lock:
+      server: localhost:11211
+      cache_control:
+        optimistic_lock: true
+        pessimistic_lock: true
+    cache_control_implicit:
+      server: localhost:11211
   cache_control:
     optimistic_lock: false
     pessimistic_lock: false

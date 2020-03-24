@@ -62,9 +62,10 @@ type LLCConfig struct {
 }
 
 type TagConfig struct {
-	Server         *string        `yaml:"server"`
-	Expiration     *time.Duration `yaml:"expiration"`
-	LockExpiration *time.Duration `yaml:"lock_expiration"`
+	Server         *string             `yaml:"server"`
+	CacheControl   *CacheControlConfig `yaml:"cache_control"`
+	Expiration     *time.Duration      `yaml:"expiration"`
+	LockExpiration *time.Duration      `yaml:"lock_expiration"`
 }
 
 func NewConfig(path string) (*Config, error) {
@@ -164,6 +165,17 @@ func (cfg *CacheControlConfig) TableOptions(table string) []OptionFunc {
 	return opts
 }
 
+func (cfg *CacheControlConfig) TagOptions(tag string) []OptionFunc {
+	opts := []OptionFunc{}
+	if cfg.OptimisticLock != nil {
+		opts = append(opts, LastLevelCacheTagOptimisticLock(tag, *cfg.OptimisticLock))
+	}
+	if cfg.PessimisticLock != nil {
+		opts = append(opts, LastLevelCacheTagPessimisticLock(tag, *cfg.PessimisticLock))
+	}
+	return opts
+}
+
 func (cfg *SLCConfig) Options() []OptionFunc {
 	opts := []OptionFunc{}
 	if cfg.Servers != nil {
@@ -235,6 +247,9 @@ func (cfg *TagConfig) Options(tag string) []OptionFunc {
 	}
 	if cfg.LockExpiration != nil {
 		opts = append(opts, LastLevelCacheTagLockExpiration(tag, *cfg.LockExpiration))
+	}
+	if cfg.CacheControl != nil {
+		opts = append(opts, cfg.CacheControl.TagOptions(tag)...)
 	}
 	return opts
 }
