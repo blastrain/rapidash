@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"time"
 
-	"github.com/lestrrat-go/msgpack"
+	"github.com/knocknote/msgpack"
 	"golang.org/x/xerrors"
 )
 
