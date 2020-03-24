@@ -64,8 +64,8 @@ github.com/juju/testing v0.0.0-20190418112600-6570bd8f8541 h1:291RYTdi1UqkKeBr9U
 github.com/juju/testing v0.0.0-20190418112600-6570bd8f8541/go.mod h1:63prj8cnj0tU0S9OHjGJn+b1h0ZghCndfnbQolrYTwA=
 github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7VTCxuUUipMqKk8s4w=
 github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+oQHNcck=
-github.com/knocknote/msgpack v0.0.0-20200324081259-48c49fa6fd05 h1:qJO16rsoucel503dkpvrIByIQBSGUgpNybMK6Xi5SYI=
-github.com/knocknote/msgpack v0.0.0-20200324081259-48c49fa6fd05/go.mod h1:hH6Dv4NZh+e5VyMx7MqZBHewQQno3OBRgVCzo5UNhhQ=
+github.com/knocknote/msgpack v0.0.0-20200324090114-032ce7b219cd h1:rFEsBI8fZOmGzh9Xd5mqt44nt9wlYrkJsmLKMCgZg48=
+github.com/knocknote/msgpack v0.0.0-20200324090114-032ce7b219cd/go.mod h1:hH6Dv4NZh+e5VyMx7MqZBHewQQno3OBRgVCzo5UNhhQ=
 github.com/knocknote/vitess-sqlparser v0.0.0-20181121014348-1003c43917a3 h1:Nk/bqRokAz+B4j+18CKyAYhkf/scbbY7anWdSZFHjqI=
 github.com/knocknote/vitess-sqlparser v0.0.0-20181121014348-1003c43917a3/go.mod h1:bF2oGXw2Ex/jIPGFPaFzEf8BtNRSBWc81ni+N9UaW5Q=
 github.com/konsorten/go-windows-terminal-sequences v1.0.1/go.mod h1:T0+1ngSBFLxvqU3pZ+m/2kptfBszLMUkC4ZK/EgS/cQ=

@@ -10,7 +10,7 @@ require (
 	github.com/juju/errors v0.0.0-20190207033735-e65537c515d7 // indirect
 	github.com/juju/loggo v0.0.0-20190212223446-d976af380377 // indirect
 	github.com/juju/testing v0.0.0-20190418112600-6570bd8f8541 // indirect
-	github.com/knocknote/msgpack v0.0.0-20200324081259-48c49fa6fd05
+	github.com/knocknote/msgpack v0.0.0-20200324090114-032ce7b219cd
 	github.com/knocknote/vitess-sqlparser v0.0.0-20181121014348-1003c43917a3
 	github.com/rakyll/statik v0.1.6
 	github.com/rs/xid v0.0.0-20180316063648-705291fb2231
