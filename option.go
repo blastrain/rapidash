@@ -203,7 +203,7 @@ func LastLevelCacheTagLockExpiration(tag string, expiration time.Duration) Optio
 func LastLevelCacheTagOptimisticLock(tag string, enabled bool) OptionFunc {
 	return func(r *Rapidash) {
 		opt := r.opt.llcOpt.tagOpt[tag]
-		opt.optimisticLock = enabled
+		opt.optimisticLock = &enabled
 		r.opt.llcOpt.tagOpt[tag] = opt
 	}
 }
@@ -211,7 +211,7 @@ func LastLevelCacheTagOptimisticLock(tag string, enabled bool) OptionFunc {
 func LastLevelCacheTagPessimisticLock(tag string, enabled bool) OptionFunc {
 	return func(r *Rapidash) {
 		opt := r.opt.llcOpt.tagOpt[tag]
-		opt.pessimisticLock = enabled
+		opt.pessimisticLock = &enabled
 		r.opt.llcOpt.tagOpt[tag] = opt
 	}
 }

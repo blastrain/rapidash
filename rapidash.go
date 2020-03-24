@@ -126,8 +126,8 @@ type TagOption struct {
 	expiration      time.Duration
 	lockExpiration  time.Duration
 	ignoreStash     bool
-	optimisticLock  bool
-	pessimisticLock bool
+	optimisticLock  *bool
+	pessimisticLock *bool
 }
 
 type QueryLog struct {

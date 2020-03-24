@@ -81,14 +81,20 @@ func (c *LastLevelCache) shouldPessimisticLock(tag string) bool {
 	if !exists {
 		return c.opt.pessimisticLock
 	}
-	return opt.pessimisticLock
+	if opt.pessimisticLock == nil {
+		return c.opt.pessimisticLock
+	}
+	return *opt.pessimisticLock
 }
 func (c *LastLevelCache) shouldOptimisticLock(tag string) bool {
 	opt, exists := c.opt.tagOpt[tag];
 	if !exists {
 		return c.opt.optimisticLock
 	}
-	return opt.optimisticLock
+	if opt.optimisticLock == nil {
+		return c.opt.optimisticLock
+	}
+	return *opt.optimisticLock
 }
 
 func (c *LastLevelCache) set(tx *Tx, tag string, cacheKey server.CacheKey, content []byte, expiration time.Duration) error {
