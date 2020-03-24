@@ -133,13 +133,19 @@ func TestConfig(t *testing.T) {
 
 					t.Run("config should have nil values", func(t *testing.T) {
 						tagCacheControlConfig := (*cfg.LLC.Tags)[tagName].CacheControl
-						IsNilf(t, tagCacheControlConfig, "should be nil")
+						if tagCacheControlConfig != nil {
+							t.Fatal("should be nil")
+						}
 					})
 
 					t.Run("options should have nil values", func(t *testing.T) {
 						tagOption := cache.lastLevelCache.opt.tagOpt[tagName]
-						IsNilf(t, tagOption.optimisticLock, "should be nil")
-						IsNilf(t, tagOption.pessimisticLock, "should be nil")
+						if tagOption.optimisticLock != nil {
+							t.Fatal("should be nil")
+						}
+						if tagOption.pessimisticLock != nil {
+							t.Fatal("should be nil")
+						}
 					})
 
 					t.Run("should retrieve last created value", func(t *testing.T) {
