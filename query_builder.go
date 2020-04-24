@@ -600,7 +600,8 @@ func (b *QueryBuilder) indexes() []string {
 	return sortedIndexes
 }
 
-func (b *QueryBuilder) SelectSQL(typ *Struct) (string, []interface{}) {
+func (b *QueryBuilder) SelectSQL(factory *ValueFactory, typ *Struct) (string, []interface{}) {
+	b.Build(factory)
 	where := []string{}
 	args := []interface{}{}
 	for _, condition := range b.conditions.conditions {
@@ -623,7 +624,8 @@ func (b *QueryBuilder) SelectSQL(typ *Struct) (string, []interface{}) {
 	), args
 }
 
-func (b *QueryBuilder) UpdateSQL(updateMap map[string]interface{}) (string, []interface{}) {
+func (b *QueryBuilder) UpdateSQL(factory *ValueFactory, updateMap map[string]interface{}) (string, []interface{}) {
+	b.Build(factory)
 	where := []string{}
 	args := []interface{}{}
 	for _, condition := range b.conditions.conditions {
@@ -640,7 +642,8 @@ func (b *QueryBuilder) UpdateSQL(updateMap map[string]interface{}) (string, []in
 	return fmt.Sprintf("UPDATE `%s` SET %s WHERE %s", b.tableName, strings.Join(setList, ","), strings.Join(where, " AND ")), values
 }
 
-func (b *QueryBuilder) DeleteSQL() (string, []interface{}) {
+func (b *QueryBuilder) DeleteSQL(factory *ValueFactory) (string, []interface{}) {
+	b.Build(factory)
 	where := []string{}
 	args := []interface{}{}
 	for _, condition := range b.conditions.conditions {
