@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/knocknote/msgpack"
 	"github.com/knocknote/vitess-sqlparser/sqlparser"
-	"github.com/lestrrat-go/msgpack"
 	"go.knocknote.io/rapidash/database"
 	"go.knocknote.io/rapidash/server"
 	"golang.org/x/xerrors"

@@ -207,3 +207,19 @@ func DatabaseAdapter(dbType database.DBType) OptionFunc {
 		r.opt.adapter = database.NewAdapterWithDBType(dbType)
 	}
 }
+
+func LastLevelCacheTagOptimisticLock(tag string, enabled bool) OptionFunc {
+	return func(r *Rapidash) {
+		opt := r.opt.llcOpt.tagOpt[tag]
+		opt.optimisticLock = &enabled
+		r.opt.llcOpt.tagOpt[tag] = opt
+	}
+}
+
+func LastLevelCacheTagPessimisticLock(tag string, enabled bool) OptionFunc {
+	return func(r *Rapidash) {
+		opt := r.opt.llcOpt.tagOpt[tag]
+		opt.pessimisticLock = &enabled
+		r.opt.llcOpt.tagOpt[tag] = opt
+	}
+}

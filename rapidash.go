@@ -123,10 +123,12 @@ type LastLevelCacheOption struct {
 }
 
 type TagOption struct {
-	server         string
-	expiration     time.Duration
-	lockExpiration time.Duration
-	ignoreStash    bool
+	server          string
+	expiration      time.Duration
+	lockExpiration  time.Duration
+	ignoreStash     bool
+	optimisticLock  *bool
+	pessimisticLock *bool
 }
 
 type QueryLog struct {
