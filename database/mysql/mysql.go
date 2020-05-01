@@ -27,9 +27,12 @@ func (ms *MySQL) Placeholder(_ int) string {
 
 func (ms *MySQL) Placeholders(length int) string {
 	sb := &strings.Builder{}
-	sb.Grow(len(ms.Placeholder(0)) * length)
+	sb.Grow((len(ms.Placeholder(0)) + 1) * length)
 	for i := 0; i < length; i++ {
 		sb.WriteString(ms.Placeholder(0))
+		if i < length-1 {
+			sb.WriteString(",")
+		}
 	}
 	return sb.String()
 }

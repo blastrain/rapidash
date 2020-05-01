@@ -16,9 +16,12 @@ func (p *Postgres) Placeholder(idx int) string {
 
 func (p *Postgres) Placeholders(length int) string {
 	sb := &strings.Builder{}
-	sb.Grow(len(p.Placeholder(length)) * length)
+	sb.Grow((len(p.Placeholder(length)) + 1) * length)
 	for i := 0; i < length; i++ {
 		sb.WriteString(p.Placeholder(i + 1))
+		if i < length-1 {
+			sb.WriteString(",")
+		}
 	}
 	return sb.String()
 }
