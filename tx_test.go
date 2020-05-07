@@ -45,6 +45,9 @@ func setUp(conn *sql.DB) error {
 	if err := initUserLogTable(conn); err != nil {
 		return xerrors.Errorf("failed to initUserLogTable: %w", err)
 	}
+	if err := initEmptyTable(conn); err != nil {
+		return xerrors.Errorf("failed to initEmptyTable: %w", err)
+	}
 	if err := initCache(conn, CacheServerTypeMemcached); err != nil {
 		return xerrors.Errorf("failed to initCache: %w", err)
 	}
@@ -158,6 +161,13 @@ func initUserLogTable(conn *sql.DB) error {
 		return xerrors.Errorf("failed to insert into user_logs table: %w", err)
 	}
 
+	return nil
+}
+
+func initEmptyTable(conn *sql.DB) error {
+	if err := initTable(conn, "empties"); err != nil {
+		return xerrors.Errorf("failed to exec empties: %w", err)
+	}
 	return nil
 }
 
