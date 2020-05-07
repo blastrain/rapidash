@@ -21,20 +21,28 @@ var (
 	cache *Rapidash
 )
 
-func setUp(conn *sql.DB, pluginName string) error {
+var (
+	drivers = map[string]string{
+		"mysql":    "root:@tcp(localhost:3306)/rapidash?parseTime=true",
+		"postgres": "host=localhost user=root dbname=rapidash sslmode=disable",
+	}
+	driver = os.Getenv("RAPIDASH_DB_DRIVER")
+)
+
+func setUp(conn *sql.DB) error {
 	if err := initDB(); err != nil {
 		return xerrors.Errorf("failed to initDB: %w", err)
 	}
-	if err := initEventTable(conn, pluginName); err != nil {
+	if err := initEventTable(conn); err != nil {
 		return xerrors.Errorf("failed to initEventTable: %w", err)
 	}
-	if err := initUserLoginTable(conn, pluginName); err != nil {
+	if err := initUserLoginTable(conn); err != nil {
 		return xerrors.Errorf("failed to initUserLoginTable: %w", err)
 	}
-	if err := initPtrTable(conn, pluginName); err != nil {
+	if err := initPtrTable(conn); err != nil {
 		return xerrors.Errorf("failed to initPtrTable: %w", err)
 	}
-	if err := initUserLogTable(conn, pluginName); err != nil {
+	if err := initUserLogTable(conn); err != nil {
 		return xerrors.Errorf("failed to initUserLogTable: %w", err)
 	}
 	if err := initCache(conn, CacheServerTypeMemcached); err != nil {
@@ -54,8 +62,8 @@ func initDB() error {
 	return nil
 }
 
-func initTable(conn *sql.DB, pluginName, tableName string) error {
-	sql, err := ioutil.ReadFile(filepath.Join("testdata", pluginName, tableName+".sql"))
+func initTable(conn *sql.DB, tableName string) error {
+	sql, err := ioutil.ReadFile(filepath.Join("testdata", driver, tableName+".sql"))
 	if err != nil {
 		return xerrors.Errorf("failed to read sql file: %w", err)
 	}
@@ -68,8 +76,8 @@ func initTable(conn *sql.DB, pluginName, tableName string) error {
 	return nil
 }
 
-func initEventTable(conn *sql.DB, pluginName string) error {
-	if err := initTable(conn, pluginName, "events"); err != nil {
+func initEventTable(conn *sql.DB) error {
+	if err := initTable(conn, "events"); err != nil {
 		return xerrors.Errorf("failed to init events: %w", err)
 	}
 	id := 1
@@ -90,8 +98,8 @@ func initEventTable(conn *sql.DB, pluginName string) error {
 	return nil
 }
 
-func initUserLoginTable(conn *sql.DB, pluginName string) error {
-	if err := initTable(conn, pluginName, "user_logins"); err != nil {
+func initUserLoginTable(conn *sql.DB) error {
+	if err := initTable(conn, "user_logins"); err != nil {
 		return xerrors.Errorf("failed to exec user_logins: %w", err)
 	}
 	userID := 1
@@ -107,8 +115,8 @@ func initUserLoginTable(conn *sql.DB, pluginName string) error {
 	return nil
 }
 
-func initPtrTable(conn *sql.DB, pluginName string) error {
-	if err := initTable(conn, pluginName, "ptr"); err != nil {
+func initPtrTable(conn *sql.DB) error {
+	if err := initTable(conn, "ptr"); err != nil {
 		return xerrors.Errorf("failed to exec ptr: %w", err)
 	}
 	if _, err := conn.Exec("INSERT INTO `ptr` () values ()"); err != nil {
@@ -142,8 +150,8 @@ INSERT INTO ptr
 	return nil
 }
 
-func initUserLogTable(conn *sql.DB, pluginName string) error {
-	if err := initTable(conn, pluginName, "user_logs"); err != nil {
+func initUserLogTable(conn *sql.DB) error {
+	if err := initTable(conn, "user_logs"); err != nil {
 		return xerrors.Errorf("failed to exec user_logs: %w", err)
 	}
 	if _, err := conn.Exec("INSERT INTO `user_logs` (`user_id`,`content_type`,`content_id`,`created_at`,`updated_at`) VALUES (?, ?, ?, ?, ?)", 1, "rapidash", 1, time.Now(), time.Now()); err != nil {
@@ -213,23 +221,19 @@ func initCache(conn *sql.DB, typ CacheServerType) error {
 }
 
 func TestMain(m *testing.M) {
-	drivers := map[string]string{
-		"mysql": "root:@tcp(localhost:3306)/rapidash?parseTime=true",
+	source := drivers[driver]
+	var err error
+	conn, err = sql.Open(driver, source)
+	if err != nil {
+		panic(err)
 	}
-	for plugin, source := range drivers {
-		var err error
-		conn, err = sql.Open(plugin, source)
-		if err != nil {
-			panic(err)
-		}
-		if err := setUp(conn, plugin); err != nil {
-			panic(err)
-		}
+	if err := setUp(conn); err != nil {
+		panic(err)
+	}
 
-		result := m.Run()
-		if result != 0 {
-			os.Exit(result)
-		}
+	result := m.Run()
+	if result != 0 {
+		os.Exit(result)
 	}
 
 	os.Exit(0)
