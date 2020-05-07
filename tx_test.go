@@ -4,10 +4,15 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"io/ioutil"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/lib/pq"
 	"golang.org/x/xerrors"
 )
 
@@ -16,24 +21,21 @@ var (
 	cache *Rapidash
 )
 
-func setUp(conn *sql.DB) error {
+func setUp(conn *sql.DB, pluginName string) error {
 	if err := initDB(); err != nil {
 		return xerrors.Errorf("failed to initDB: %w", err)
 	}
-	if err := initEventTable(conn); err != nil {
+	if err := initEventTable(conn, pluginName); err != nil {
 		return xerrors.Errorf("failed to initEventTable: %w", err)
 	}
-	if err := initUserLoginTable(conn); err != nil {
+	if err := initUserLoginTable(conn, pluginName); err != nil {
 		return xerrors.Errorf("failed to initUserLoginTable: %w", err)
 	}
-	if err := initPtrTable(conn); err != nil {
+	if err := initPtrTable(conn, pluginName); err != nil {
 		return xerrors.Errorf("failed to initPtrTable: %w", err)
 	}
-	if err := initUserLogTable(conn); err != nil {
+	if err := initUserLogTable(conn, pluginName); err != nil {
 		return xerrors.Errorf("failed to initUserLogTable: %w", err)
-	}
-	if err := initEmptyTable(conn); err != nil {
-		return xerrors.Errorf("failed to initEmptyTable: %w", err)
 	}
 	if err := initCache(conn, CacheServerTypeMemcached); err != nil {
 		return xerrors.Errorf("failed to initCache: %w", err)
@@ -52,29 +54,23 @@ func initDB() error {
 	return nil
 }
 
-func initEventTable(conn *sql.DB) error {
-	if _, err := conn.Exec("DROP TABLE IF EXISTS events"); err != nil {
-		return xerrors.Errorf("failed to drop events table: %w", err)
+func initTable(conn *sql.DB, pluginName, tableName string) error {
+	sql, err := ioutil.ReadFile(filepath.Join("testdata", pluginName, tableName+".sql"))
+	if err != nil {
+		return xerrors.Errorf("failed to read sql file: %w", err)
 	}
+	queries := strings.Split(string(sql), ";")
+	for _, query := range queries[:len(queries)-1] {
+		if _, err := conn.Exec(query); err != nil {
+			return xerrors.Errorf("failed to exec query: %w", err)
+		}
+	}
+	return nil
+}
 
-	sql := `
-CREATE TABLE events (
-  id bigint(20) unsigned NOT NULL,
-  event_id bigint(20) unsigned NOT NULL,
-  event_category_id bigint(20) unsigned NOT NULL,
-  term enum('early_morning', 'morning', 'daytime', 'evening', 'night', 'midnight') NOT NULL,
-  start_week int(10) unsigned NOT NULL,
-  end_week int(10) unsigned NOT NULL,
-  created_at datetime NOT NULL,
-  updated_at datetime NOT NULL,
-  PRIMARY KEY (id),
-  UNIQUE KEY (event_id, start_week),
-  KEY (term, start_week, end_week)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-`
-
-	if _, err := conn.Exec(sql); err != nil {
-		return xerrors.Errorf("failed to create events table: %w", err)
+func initEventTable(conn *sql.DB, pluginName string) error {
+	if err := initTable(conn, pluginName, "events"); err != nil {
+		return xerrors.Errorf("failed to init events: %w", err)
 	}
 	id := 1
 	for eventID := 1; eventID <= 1000; eventID++ {
@@ -91,33 +87,13 @@ CREATE TABLE events (
 			endWeek += 12
 		}
 	}
-
 	return nil
 }
 
-func initUserLoginTable(conn *sql.DB) error {
-	if _, err := conn.Exec("DROP TABLE IF EXISTS user_logins"); err != nil {
-		return xerrors.Errorf("failed to drop user_logins table: %w", err)
+func initUserLoginTable(conn *sql.DB, pluginName string) error {
+	if err := initTable(conn, pluginName, "user_logins"); err != nil {
+		return xerrors.Errorf("failed to exec user_logins: %w", err)
 	}
-	sql := `
-CREATE TABLE IF NOT EXISTS user_logins (
-  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-  user_id bigint(20) unsigned NOT NULL,
-  user_session_id bigint(20) unsigned NOT NULL,
-  login_param_id bigint(20) unsigned NOT NULL,
-  name varchar(255) NOT NULL,
-  created_at datetime NOT NULL,
-  updated_at datetime NOT NULL,
-  PRIMARY KEY (id),
-  UNIQUE KEY (user_id, user_session_id),
-  KEY (user_id, login_param_id),
-  KEY (user_id, created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8
-`
-	if _, err := conn.Exec(sql); err != nil {
-		return xerrors.Errorf("failed to create user_logins table: %w", err)
-	}
-
 	userID := 1
 	userSessionID := 1
 	loginParamID := 1
@@ -131,34 +107,9 @@ CREATE TABLE IF NOT EXISTS user_logins (
 	return nil
 }
 
-func initPtrTable(conn *sql.DB) error {
-	if _, err := conn.Exec("DROP TABLE IF EXISTS ptr"); err != nil {
-		return xerrors.Errorf("failed to drop ptr table: %w", err)
-	}
-	sql := `
-CREATE TABLE IF NOT EXISTS ptr (
-  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-  intptr int,
-  int8ptr int,
-  int16ptr int,
-  int32ptr int,
-  int64ptr int,
-  uintptr int unsigned,
-  uint8ptr int unsigned,
-  uint16ptr int unsigned,
-  uint32ptr int unsigned,
-  uint64ptr bigint unsigned,
-  float32ptr float,
-  float64ptr double,
-  boolptr tinyint,
-  bytesptr varchar(255),
-  stringptr varchar(255),
-  timeptr datetime,
-  PRIMARY KEY (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8
-`
-	if _, err := conn.Exec(sql); err != nil {
-		return xerrors.Errorf("failed to create ptr table: %w", err)
+func initPtrTable(conn *sql.DB, pluginName string) error {
+	if err := initTable(conn, pluginName, "ptr"); err != nil {
+		return xerrors.Errorf("failed to exec ptr: %w", err)
 	}
 	if _, err := conn.Exec("INSERT INTO `ptr` () values ()"); err != nil {
 		return xerrors.Errorf("failed to insert empty record to ptr table: %w", err)
@@ -191,48 +142,12 @@ INSERT INTO ptr
 	return nil
 }
 
-func initUserLogTable(conn *sql.DB) error {
-	if _, err := conn.Exec("DROP TABLE IF EXISTS user_logs"); err != nil {
-		return xerrors.Errorf("failed to drop user_logs table: %w", err)
+func initUserLogTable(conn *sql.DB, pluginName string) error {
+	if err := initTable(conn, pluginName, "user_logs"); err != nil {
+		return xerrors.Errorf("failed to exec user_logs: %w", err)
 	}
-	sql := `
-CREATE TABLE IF NOT EXISTS user_logs (
-  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-  user_id bigint(20) unsigned NOT NULL,
-  content_type varchar(255) NOT NULL,
-  content_id bigint(20) unsigned NOT NULL,
-  created_at datetime NOT NULL,
-  updated_at datetime NOT NULL,
-  PRIMARY KEY (id),
-  KEY (user_id, created_at),
-  KEY (user_id, content_type, content_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8
-`
-	if _, err := conn.Exec(sql); err != nil {
-		return xerrors.Errorf("failed to create user_logs table: %w", err)
-	}
-
 	if _, err := conn.Exec("INSERT INTO `user_logs` (`user_id`,`content_type`,`content_id`,`created_at`,`updated_at`) VALUES (?, ?, ?, ?, ?)", 1, "rapidash", 1, time.Now(), time.Now()); err != nil {
 		return xerrors.Errorf("failed to insert into user_logs table: %w", err)
-	}
-
-	return nil
-}
-
-func initEmptyTable(conn *sql.DB) error {
-	if _, err := conn.Exec("DROP TABLE IF EXISTS empties"); err != nil {
-		return xerrors.Errorf("failed to drop empties table: %w", err)
-	}
-
-	sql := `
-CREATE TABLE empties (
-  id bigint(20) unsigned NOT NULL,
-  PRIMARY KEY (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-`
-
-	if _, err := conn.Exec(sql); err != nil {
-		return xerrors.Errorf("failed to create empties table: %w", err)
 	}
 
 	return nil
@@ -298,18 +213,26 @@ func initCache(conn *sql.DB, typ CacheServerType) error {
 }
 
 func TestMain(m *testing.M) {
-	var err error
-	conn, err = sql.Open("mysql", "root:@tcp(localhost:3306)/rapidash?parseTime=true")
-	if err != nil {
-		panic(err)
+	drivers := map[string]string{
+		"mysql": "root:@tcp(localhost:3306)/rapidash?parseTime=true",
 	}
-	if err := setUp(conn); err != nil {
-		panic(err)
+	for plugin, source := range drivers {
+		var err error
+		conn, err = sql.Open(plugin, source)
+		if err != nil {
+			panic(err)
+		}
+		if err := setUp(conn, plugin); err != nil {
+			panic(err)
+		}
+
+		result := m.Run()
+		if result != 0 {
+			os.Exit(result)
+		}
 	}
 
-	result := m.Run()
-
-	os.Exit(result)
+	os.Exit(0)
 
 }
 
