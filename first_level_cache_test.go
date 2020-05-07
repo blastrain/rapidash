@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"go.knocknote.io/rapidash/database"
-
-	_ "github.com/go-sql-driver/mysql"
 	"golang.org/x/xerrors"
 )
 

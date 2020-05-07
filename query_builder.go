@@ -6,6 +6,7 @@ import (
 
 	"github.com/knocknote/vitess-sqlparser/sqlparser"
 	"go.knocknote.io/rapidash/database"
+	"go.knocknote.io/rapidash/database/mysql"
 	"go.knocknote.io/rapidash/server"
 	"golang.org/x/xerrors"
 )
@@ -549,6 +550,7 @@ func NewQueryBuilder(tableName string) *QueryBuilder {
 			conditions: []Condition{},
 		},
 		orderConditions: []*OrderCondition{},
+		adapter:         &mysql.MySQL{},
 	}
 }
 
@@ -816,32 +818,32 @@ func (b *QueryBuilder) Query() string {
 }
 
 func (b *QueryBuilder) Eq(column string, value interface{}) *QueryBuilder {
-	b.conditions.Append(&EQCondition{column: column, rawValue: value})
+	b.conditions.Append(&EQCondition{column: column, rawValue: value, adapter: b.adapter})
 	return b
 }
 
 func (b *QueryBuilder) Neq(column string, value interface{}) *QueryBuilder {
-	b.conditions.Append(&NEQCondition{column: column, rawValue: value})
+	b.conditions.Append(&NEQCondition{column: column, rawValue: value, adapter: b.adapter})
 	return b
 }
 
 func (b *QueryBuilder) Gt(column string, value interface{}) *QueryBuilder {
-	b.conditions.Append(&GTCondition{column: column, rawValue: value})
+	b.conditions.Append(&GTCondition{column: column, rawValue: value, adapter: b.adapter})
 	return b
 }
 
 func (b *QueryBuilder) Lt(column string, value interface{}) *QueryBuilder {
-	b.conditions.Append(&LTCondition{column: column, rawValue: value})
+	b.conditions.Append(&LTCondition{column: column, rawValue: value, adapter: b.adapter})
 	return b
 }
 
 func (b *QueryBuilder) Gte(column string, value interface{}) *QueryBuilder {
-	b.conditions.Append(&GTECondition{column: column, rawValue: value})
+	b.conditions.Append(&GTECondition{column: column, rawValue: value, adapter: b.adapter})
 	return b
 }
 
 func (b *QueryBuilder) Lte(column string, value interface{}) *QueryBuilder {
-	b.conditions.Append(&LTECondition{column: column, rawValue: value})
+	b.conditions.Append(&LTECondition{column: column, rawValue: value, adapter: b.adapter})
 	return b
 }
 
@@ -850,7 +852,7 @@ func (b *QueryBuilder) In(column string, values interface{}) *QueryBuilder {
 		b.err = ErrMultipleINQueries
 		return b
 	}
-	condition := &INCondition{column: column, rawValues: values}
+	condition := &INCondition{column: column, rawValues: values, adapter: b.adapter}
 	b.inCondition = condition
 	b.conditions.Append(condition)
 	return b

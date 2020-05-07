@@ -26,10 +26,6 @@ type Adapter interface {
 	Placeholders(int) string
 }
 
-type SQLValueGetter interface {
-
-}
-
 func NewDBAdapter() Adapter {
 	drivers := sql.Drivers()
 	if len(drivers) == 0 {
