@@ -232,11 +232,7 @@ func TestMain(m *testing.M) {
 	}
 
 	result := m.Run()
-	if result != 0 {
-		os.Exit(result)
-	}
-
-	os.Exit(0)
+	os.Exit(result)
 
 }
 
