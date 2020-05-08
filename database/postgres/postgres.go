@@ -189,24 +189,30 @@ const (
 	bigint                   = "bigint"
 	bigserial                = "bigserial"
 	timestampWithoutTimeZone = "timestamp without time zone"
+	timestampWithTimeZone    = "timestamp with time zone"
 	timestamp                = "timestamp"
 	timeWithoutTimeZone      = "time without time zone"
+	timeWithTimeZone         = "time with time zone"
 	time                     = "time"
-	UserDefined              = "USER-DEFINED"
+	userDefined              = "USER-DEFINED"
 	char                     = "char"
+	varchar                  = "varchar"
+	characterVarying         = "character varying"
 
 	indent = "    "
 )
 
+// Rapidash gets DDL from database to get the index(including unique key, primary key) information.
+// Therefore, instead of getting the strict DDL, the data type is processed so that at least this information can be parsed.
 func (c *column) DataType() string {
 	switch c.dataType {
 	case smallint, integer, bigint, smallserial, serial, bigserial:
 		return c.dataType
-	case timestampWithoutTimeZone:
+	case timestampWithoutTimeZone, timestampWithTimeZone:
 		return timestamp
-	case timeWithoutTimeZone:
+	case timeWithoutTimeZone, timeWithTimeZone:
 		return time
-	case UserDefined:
+	case userDefined, characterVarying, varchar:
 		return char
 	default:
 		return c.dataType
