@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"testing"
 	"time"
-
-	"go.knocknote.io/rapidash/database"
 )
 
 func TestConfig(t *testing.T) {
@@ -45,7 +43,7 @@ func TestConfig(t *testing.T) {
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
 		for i := 1001; i <= 1005; i++ {
-			builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
+			builder := NewQueryBuilder("user_logins", driver.Adapter).
 				Eq("user_id", uint64(i)).
 				Eq("user_session_id", uint64(i))
 			var foundUserLogin UserLogin

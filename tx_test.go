@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -23,11 +24,22 @@ var (
 )
 
 var (
-	drivers = map[string]string{
-		"mysql":    "root:@tcp(localhost:3306)/rapidash?parseTime=true",
-		"postgres": "host=localhost user=root dbname=rapidash sslmode=disable",
+	drivers = map[string]struct {
+		Name, Source string
+		Adapter      database.Adapter
+	}{
+		"mysql": {
+			Name:    "mysql",
+			Source:  "root:@tcp(localhost:3306)/rapidash?parseTime=true",
+			Adapter: database.NewAdapterWithDBType(database.MySQL),
+		},
+		"postgres": {
+			Name:    "postgres",
+			Source:  "host=localhost user=root dbname=rapidash sslmode=disable",
+			Adapter: database.NewAdapterWithDBType(database.Postgres),
+		},
 	}
-	driver = os.Getenv("RAPIDASH_DB_DRIVER")
+	driver = drivers[os.Getenv("RAPIDASH_DB_DRIVER")]
 )
 
 func setUp(conn *sql.DB) error {
@@ -67,7 +79,7 @@ func initDB() error {
 }
 
 func initTable(conn *sql.DB, tableName string) error {
-	sql, err := ioutil.ReadFile(filepath.Join("testdata", driver, tableName+".sql"))
+	sql, err := ioutil.ReadFile(filepath.Join("testdata", driver.Name, tableName+".sql"))
 	if err != nil {
 		return xerrors.Errorf("failed to read sql file: %w", err)
 	}
@@ -85,13 +97,14 @@ func initEventTable(conn *sql.DB) error {
 		return xerrors.Errorf("failed to init events: %w", err)
 	}
 	id := 1
+	adapter := driver.Adapter
 	for eventID := 1; eventID <= 1000; eventID++ {
 		startWeek := 1
 		endWeek := 12
 		term := "daytime"
 		eventCategoryID := eventID
 		for j := 0; j < 4; j++ {
-			if _, err := conn.Exec("insert into events values(?, ?, ?, ?, ?, ?, ?, ?)", id, eventID, eventCategoryID, term, startWeek, endWeek, time.Now(), time.Now()); err != nil {
+			if _, err := conn.Exec(fmt.Sprintf("insert into events values(%s)", adapter.Placeholders(8)), id, eventID, eventCategoryID, term, startWeek, endWeek, time.Now(), time.Now()); err != nil {
 				return xerrors.Errorf("failed to insert into events table: %w", err)
 			}
 			id++
@@ -232,9 +245,8 @@ func initCache(conn *sql.DB, typ CacheServerType) error {
 }
 
 func TestMain(m *testing.M) {
-	source := drivers[driver]
 	var err error
-	conn, err = sql.Open(driver, source)
+	conn, err = sql.Open(driver.Name, driver.Source)
 	if err != nil {
 		panic(err)
 	}
@@ -323,11 +335,11 @@ func TestTx_CreateByTableContext(t *testing.T) {
 		NoError(t, err)
 		NotEqualf(t, id, 0, "last insert id is zero")
 		var findUserFromSLCByPrimaryKey UserLogin
-		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(0))
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(0))
 		NoError(t, tx.FindByQueryBuilder(builder, &findUserFromSLCByPrimaryKey))
 		Equal(t, findUserFromSLCByPrimaryKey.ID, userLogin.ID)
 		var findUserFromSLCByUniqueKey UserLogin
-		builder = NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("user_id", uint64(0)).Eq("user_session_id", uint64(1000))
+		builder = NewQueryBuilder("user_logins", driver.Adapter).Eq("user_id", uint64(0)).Eq("user_session_id", uint64(1000))
 		NoError(t, tx.FindByQueryBuilder(builder, &findUserFromSLCByUniqueKey))
 		Equal(t, findUserFromSLCByPrimaryKey.ID, userLogin.ID)
 		NoError(t, tx.Commit())
@@ -351,7 +363,7 @@ func TestTx_FindByQueryBuilderContext(t *testing.T) {
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 		NoError(t, tx.Commit())
 
-		builder := NewQueryBuilder("events", database.NewDBAdapter())
+		builder := NewQueryBuilder("events", driver.Adapter)
 		var events EventSlice
 		if err := tx.FindByQueryBuilderContext(context.Background(), builder, &events); err != nil {
 			if !xerrors.Is(err, ErrAlreadyCommittedTransaction) {
@@ -366,7 +378,7 @@ func TestTx_FindByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("events", database.NewDBAdapter())
+		builder := NewQueryBuilder("events", driver.Adapter)
 		var events EventSlice
 		NoError(t, tx.FindByQueryBuilderContext(context.Background(), builder, &events))
 		NoError(t, tx.Commit())
@@ -376,7 +388,7 @@ func TestTx_FindByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 		var userLogin UserLogin
 		NoError(t, tx.FindByQueryBuilderContext(context.Background(), builder, &userLogin))
 		NoError(t, tx.Commit())
@@ -386,7 +398,7 @@ func TestTx_FindByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("user_logins", database.NewDBAdapter())
+		builder := NewQueryBuilder("user_logins", driver.Adapter)
 		var userLogins UserLogins
 		if err := tx.FindByQueryBuilderContext(context.Background(), builder, &userLogins); err != nil {
 			if !xerrors.Is(err, ErrConnectionOfTransaction) {
@@ -401,7 +413,7 @@ func TestTx_FindByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("users", database.NewDBAdapter())
+		builder := NewQueryBuilder("users", driver.Adapter)
 		var userLogins UserLogins
 		if err := tx.FindByQueryBuilderContext(context.Background(), builder, &userLogins); err == nil {
 			t.Fatal("err is nil\n")
@@ -411,7 +423,7 @@ func TestTx_FindByQueryBuilderContext(t *testing.T) {
 		tx, err := cache.Begin(conn)
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
-		builder := NewQueryBuilder("user_logs", database.NewDBAdapter()).Eq("id", uint64(1)).Gte("content_id", uint64(1)).Lte("content_id", uint64(1))
+		builder := NewQueryBuilder("user_logs", driver.Adapter).Eq("id", uint64(1)).Gte("content_id", uint64(1)).Lte("content_id", uint64(1))
 		var userLogs UserLogs
 		NoError(t, tx.FindByQueryBuilderContext(context.Background(), builder, &userLogs))
 		NoError(t, tx.Commit())
@@ -429,7 +441,7 @@ func TestTx_CountByQueryBuilder(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("events", database.NewDBAdapter())
+		builder := NewQueryBuilder("events", driver.Adapter)
 		count, err := tx.CountByQueryBuilder(builder)
 		NoError(t, err)
 		NotEqualf(t, count, 0, "failed count")
@@ -440,7 +452,7 @@ func TestTx_CountByQueryBuilder(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("user_logins", database.NewDBAdapter())
+		builder := NewQueryBuilder("user_logins", driver.Adapter)
 		count, err := tx.CountByQueryBuilder(builder)
 		NoError(t, err)
 		NotEqualf(t, count, 0, "failed count")
@@ -451,7 +463,7 @@ func TestTx_CountByQueryBuilder(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("unknown", database.NewDBAdapter())
+		builder := NewQueryBuilder("unknown", driver.Adapter)
 		if _, err := tx.CountByQueryBuilder(builder); err == nil {
 			t.Fatal("err is nil")
 		}
@@ -464,7 +476,7 @@ func TestTx_FindAllByTable(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("events", database.NewDBAdapter())
+		builder := NewQueryBuilder("events", driver.Adapter)
 		count, err := tx.CountByQueryBuilder(builder)
 		NoError(t, err)
 		var events EventSlice
@@ -472,7 +484,7 @@ func TestTx_FindAllByTable(t *testing.T) {
 
 		Equalf(t, len(events), int(count), "invalid events length")
 
-		builder = NewQueryBuilder("user_logins", database.NewDBAdapter())
+		builder = NewQueryBuilder("user_logins", driver.Adapter)
 		count, err = tx.CountByQueryBuilder(builder)
 		NoError(t, err)
 		var userLogins UserLogins
@@ -499,14 +511,14 @@ func TestTx_UpdateByQueryBuilder(t *testing.T) {
 	NoError(t, err)
 	defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-	findBuilder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
+	findBuilder := NewQueryBuilder("user_logins", driver.Adapter).
 		Eq("user_id", uint64(1)).
 		Eq("user_session_id", uint64(1))
 	var userLogin UserLogin
 	NoError(t, tx.FindByQueryBuilder(findBuilder, &userLogin))
 	NotEqualf(t, userLogin.ID, 0, "cannot find userLogin")
 
-	builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", userLogin.ID)
+	builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", userLogin.ID)
 	NoError(t, tx.UpdateByQueryBuilder(builder, map[string]interface{}{
 		"login_param_id": uint64(10),
 	}))
@@ -522,7 +534,7 @@ func TestTx_UpdateByQueryBuilderContext(t *testing.T) {
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 		NoError(t, tx.Commit())
 
-		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 		if err := tx.UpdateByQueryBuilderContext(context.Background(), builder, map[string]interface{}{
 			"login_param_id": uint64(10),
 		}); err != nil {
@@ -540,7 +552,7 @@ func TestTx_UpdateByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("events", database.NewDBAdapter()).Eq("id", uint64(1))
+		builder := NewQueryBuilder("events", driver.Adapter).Eq("id", uint64(1))
 		var event Event
 		NoError(t, tx.FindByQueryBuilder(builder, &event))
 		NotEqualf(t, event.ID, 0, "cannot find event")
@@ -556,7 +568,7 @@ func TestTx_UpdateByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 		if err := tx.UpdateByQueryBuilderContext(context.Background(), builder, map[string]interface{}{
 			"login_param_id": uint64(10),
 		}); err != nil {
@@ -574,14 +586,14 @@ func TestTx_UpdateByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		findBuilder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
+		findBuilder := NewQueryBuilder("user_logins", driver.Adapter).
 			Eq("user_id", uint64(1)).
 			Eq("user_session_id", uint64(1))
 		var userLogin UserLogin
 		NoError(t, tx.FindByQueryBuilder(findBuilder, &userLogin))
 		NotEqualf(t, userLogin.ID, 0, "cannot find userLogin")
 
-		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", userLogin.ID)
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", userLogin.ID)
 		NoError(t, tx.UpdateByQueryBuilderContext(context.Background(), builder, map[string]interface{}{
 			"login_param_id": uint64(10),
 		}))
@@ -594,7 +606,7 @@ func TestTx_UpdateByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("rapidash", database.NewDBAdapter()).Eq("id", uint64(1))
+		builder := NewQueryBuilder("rapidash", driver.Adapter).Eq("id", uint64(1))
 		if err := tx.UpdateByQueryBuilderContext(context.Background(), builder, map[string]interface{}{
 			"start_week": uint8(10),
 		}); err == nil {
@@ -610,14 +622,14 @@ func TestTx_DeleteByQueryBuilder(t *testing.T) {
 	NoError(t, err)
 	defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-	findBuilder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
+	findBuilder := NewQueryBuilder("user_logins", driver.Adapter).
 		Eq("user_id", uint64(1)).
 		Eq("user_session_id", uint64(1))
 	var userLogin UserLogin
 	NoError(t, tx.FindByQueryBuilder(findBuilder, &userLogin))
 	NotEqualf(t, userLogin.ID, 0, "cannot find userLogin")
 
-	builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", userLogin.ID)
+	builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", userLogin.ID)
 	NoError(t, tx.DeleteByQueryBuilder(builder))
 	NoError(t, tx.Commit())
 }
@@ -631,7 +643,7 @@ func TestTx_DeleteByQueryBuilderContext(t *testing.T) {
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 		NoError(t, tx.Commit())
 
-		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 		if err := tx.DeleteByQueryBuilderContext(context.Background(), builder); err != nil {
 			if !xerrors.Is(err, ErrAlreadyCommittedTransaction) {
 				t.Fatalf("unexpected type err: %+v", err)
@@ -647,7 +659,7 @@ func TestTx_DeleteByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("events", database.NewDBAdapter()).Eq("id", uint64(1))
+		builder := NewQueryBuilder("events", driver.Adapter).Eq("id", uint64(1))
 		var event Event
 		NoError(t, tx.FindByQueryBuilder(builder, &event))
 		NotEqualf(t, event.ID, 0, "cannot find event")
@@ -661,7 +673,7 @@ func TestTx_DeleteByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 		if err := tx.DeleteByQueryBuilderContext(context.Background(), builder); err != nil {
 			if !xerrors.Is(err, ErrConnectionOfTransaction) {
 				t.Fatalf("unexpected type err: %+v", err)
@@ -677,14 +689,14 @@ func TestTx_DeleteByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		findBuilder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
+		findBuilder := NewQueryBuilder("user_logins", driver.Adapter).
 			Eq("user_id", uint64(1)).
 			Eq("user_session_id", uint64(1))
 		var userLogin UserLogin
 		NoError(t, tx.FindByQueryBuilder(findBuilder, &userLogin))
 		NotEqualf(t, userLogin.ID, 0, "cannot find userLogin")
 
-		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", userLogin.ID)
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", userLogin.ID)
 		NoError(t, tx.DeleteByQueryBuilderContext(context.Background(), builder))
 		NoError(t, tx.Commit())
 	})
@@ -695,7 +707,7 @@ func TestTx_DeleteByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("rapidash", database.NewDBAdapter()).Eq("id", uint64(1))
+		builder := NewQueryBuilder("rapidash", driver.Adapter).Eq("id", uint64(1))
 		if err := tx.DeleteByQueryBuilderContext(context.Background(), builder); err == nil {
 			t.Fatalf("err is nil")
 		}
