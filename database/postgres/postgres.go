@@ -26,6 +26,10 @@ func (p *Postgres) Placeholders(length int) string {
 	return sb.String()
 }
 
+func (p *Postgres) Escape(s string) string {
+	return fmt.Sprintf(`"%s"`, s)
+}
+
 func (p *Postgres) TableDDL(conn *sql.DB, table string) (string, error) {
 	cols, err := p.getColumns(conn, table)
 	if err != nil {
