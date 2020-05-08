@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"go.knocknote.io/rapidash/database"
 	"go.knocknote.io/rapidash/server"
 	"golang.org/x/xerrors"
 )
@@ -31,7 +32,7 @@ func TestServerChanging(t *testing.T) {
 		NoErrorf(t, err, "cannot begin cache transaction")
 		NoErrorf(t, cache.RemoveSecondLevelCacheServers("localhost:11211"), "cannot remove server")
 
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
 		var v UserLogin
 		Errorf(t, tx.FindByQueryBuilder(builder, &v), "find slc cache")
 		NoErrorf(t, tx.Create("int", Int(1)), "cannot create cache")
@@ -59,7 +60,7 @@ func TestServerChanging(t *testing.T) {
 func TestRecover(t *testing.T) {
 	txConn, err := conn.Begin()
 	NoError(t, err)
-	builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+	builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
 	var v UserLogin
 	{
 		tx, err := cache.Begin(txConn)

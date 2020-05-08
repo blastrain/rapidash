@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"go.knocknote.io/rapidash/database"
 )
 
 func TestConfig(t *testing.T) {
@@ -43,7 +45,7 @@ func TestConfig(t *testing.T) {
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
 		for i := 1001; i <= 1005; i++ {
-			builder := NewQueryBuilder("user_logins").
+			builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 				Eq("user_id", uint64(i)).
 				Eq("user_session_id", uint64(i))
 			var foundUserLogin UserLogin
@@ -173,7 +175,7 @@ func TestConfig(t *testing.T) {
 
 					t.Run("should retrieve each handled data", func(t *testing.T) {
 						key := fmt.Sprintf("key_%d", time.Now().UnixNano())
-						var resultFirst  int
+						var resultFirst int
 						var resultSecond int
 						expectFirst := 1
 						expectSecond := 2
@@ -213,7 +215,7 @@ func TestConfig(t *testing.T) {
 				t.Run("implicit cache control", func(t *testing.T) {
 					t.Run("should retrieve each handled data", func(t *testing.T) {
 						key := fmt.Sprintf("key_%d", time.Now().UnixNano())
-						var resultFirst  int
+						var resultFirst int
 						var resultSecond int
 						expectFirst := 1
 						expectSecond := 2

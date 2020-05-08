@@ -1364,7 +1364,7 @@ func (c *SecondLevelCache) DeleteByQueryBuilder(ctx context.Context, tx *Tx, bui
 }
 
 func (c *SecondLevelCache) builderByValue(value *StructValue, index *Index) *QueryBuilder {
-	builder := NewQueryBuilder(c.typ.tableName)
+	builder := NewQueryBuilder(c.typ.tableName, c.adapter)
 	for _, column := range index.Columns {
 		if value.fields[column] == nil {
 			return nil
@@ -1377,13 +1377,13 @@ func (c *SecondLevelCache) builderByValue(value *StructValue, index *Index) *Que
 func (c *SecondLevelCache) updateBuilderByValue(value *StructValue, index *Index, updateMap map[string]interface{}) *QueryBuilder {
 	switch index.Type {
 	case IndexTypePrimaryKey:
-		builder := NewQueryBuilder(c.typ.tableName)
+		builder := NewQueryBuilder(c.typ.tableName, c.adapter)
 		for _, column := range index.Columns {
 			builder.Eq(column, value.fields[column].RawValue())
 		}
 		return builder
 	case IndexTypeKey, IndexTypeUniqueKey:
-		builder := NewQueryBuilder(c.typ.tableName)
+		builder := NewQueryBuilder(c.typ.tableName, c.adapter)
 		for _, column := range index.Columns {
 			if _, exists := updateMap[column]; !exists {
 				return nil

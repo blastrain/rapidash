@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jinzhu/gorm"
+	"go.knocknote.io/rapidash/database"
 )
 
 type A struct {
@@ -202,7 +203,7 @@ func BenchmarkGetByPrimaryKey_RapidashWorst(b *testing.B) {
 		if err != nil {
 			panic(err)
 		}
-		builder := NewQueryBuilder("a").Eq("id", id)
+		builder := NewQueryBuilder("a", database.NewDBAdapter()).Eq("id", id)
 		var a A
 		if err := tx.FindByQueryBuilder(builder, &a); err != nil {
 			panic(err)
@@ -243,7 +244,7 @@ func BenchmarkGetByPrimaryKey_RapidashBest(b *testing.B) {
 		if err != nil {
 			panic(err)
 		}
-		builder := NewQueryBuilder("a").Eq("id", id)
+		builder := NewQueryBuilder("a", database.NewDBAdapter()).Eq("id", id)
 		var a A
 		if err := tx.FindByQueryBuilder(builder, &a); err != nil {
 			panic(err)
@@ -261,7 +262,7 @@ func BenchmarkGetByPrimaryKey_RapidashBest(b *testing.B) {
 		if err != nil {
 			panic(err)
 		}
-		builder := NewQueryBuilder("a").Eq("id", id)
+		builder := NewQueryBuilder("a", database.NewDBAdapter()).Eq("id", id)
 		var a A
 		if err := tx.FindByQueryBuilder(builder, &a); err != nil {
 			panic(err)
@@ -462,7 +463,7 @@ func BenchmarkUpdateByPrimaryKey_RapidashWorst(b *testing.B) {
 		if err != nil {
 			panic(err)
 		}
-		builder := NewQueryBuilder("a").Eq("id", id)
+		builder := NewQueryBuilder("a", database.NewDBAdapter()).Eq("id", id)
 		if err := tx.UpdateByQueryBuilder(builder, map[string]interface{}{
 			"name": "bench2",
 		}); err != nil {
@@ -503,7 +504,7 @@ func BenchmarkUpdateByPrimaryKey_RapidashBest(b *testing.B) {
 		if err != nil {
 			panic(err)
 		}
-		builder := NewQueryBuilder("a").Eq("id", id)
+		builder := NewQueryBuilder("a", database.NewDBAdapter()).Eq("id", id)
 		var a A
 		if err := tx.FindByQueryBuilder(builder, &a); err != nil {
 			panic(err)
@@ -524,7 +525,7 @@ func BenchmarkUpdateByPrimaryKey_RapidashBest(b *testing.B) {
 		if err != nil {
 			panic(err)
 		}
-		builder := NewQueryBuilder("a").Eq("id", id)
+		builder := NewQueryBuilder("a", database.NewDBAdapter()).Eq("id", id)
 		if err := tx.UpdateByQueryBuilder(builder, map[string]interface{}{
 			"name": "bench2",
 		}); err != nil {
@@ -622,7 +623,7 @@ func BenchmarkDeleteByPrimaryKey_Rapidash(b *testing.B) {
 		if err != nil {
 			panic(err)
 		}
-		builder := NewQueryBuilder("a").Eq("id", id)
+		builder := NewQueryBuilder("a", database.NewDBAdapter()).Eq("id", id)
 		if err := tx.DeleteByQueryBuilder(builder); err != nil {
 			panic(err)
 		}

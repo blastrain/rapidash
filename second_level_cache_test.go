@@ -235,7 +235,7 @@ func testSimpleRead(t *testing.T, typ CacheServerType) {
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
 		var v UserLogin
 		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 
@@ -251,7 +251,7 @@ func testSimpleRead(t *testing.T, typ CacheServerType) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 		t.Run("from cache server", func(t *testing.T) {
-			builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+			builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
 			var v UserLogin
 			NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 
@@ -259,7 +259,7 @@ func testSimpleRead(t *testing.T, typ CacheServerType) {
 			Equal(t, v.Name, userLogin.Name)
 		})
 		t.Run("from stash", func(t *testing.T) {
-			builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+			builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
 			var v UserLogin
 			NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 
@@ -274,7 +274,7 @@ func testSimpleRead(t *testing.T, typ CacheServerType) {
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
 		var v UserLogin
 		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 
@@ -295,7 +295,7 @@ func testSimpleRead(t *testing.T, typ CacheServerType) {
 				NoError(t, tx.RollbackUnlessCommitted())
 			}()
 
-			builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+			builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
 			var v UserLoginAfterAddColumn
 			NoError(t, tx.FindByQueryBuilder(builder, &v))
 
@@ -317,7 +317,7 @@ func testSimpleRead(t *testing.T, typ CacheServerType) {
 				NoError(t, tx.RollbackUnlessCommitted())
 			}()
 
-			builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+			builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
 			var v UserLoginReTyped
 			NoError(t, tx.FindByQueryBuilder(builder, &v))
 
@@ -340,7 +340,7 @@ func testSimpleRead(t *testing.T, typ CacheServerType) {
 				NoError(t, tx.RollbackUnlessCommitted())
 			}()
 
-			builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+			builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
 			var v UserLogin
 			NoError(t, tx.FindByQueryBuilder(builder, &v))
 
@@ -356,7 +356,7 @@ func testSimpleRead(t *testing.T, typ CacheServerType) {
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(10000))
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(10000))
 		var v UserLogin
 		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 
@@ -371,14 +371,14 @@ func testSimpleRead(t *testing.T, typ CacheServerType) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 		t.Run("from cache server", func(t *testing.T) {
-			builder := NewQueryBuilder("user_logins").Eq("id", uint64(10000))
+			builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(10000))
 			var v UserLogin
 			NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 
 			Equal(t, v.ID, uint64(0))
 		})
 		t.Run("from stash", func(t *testing.T) {
-			builder := NewQueryBuilder("user_logins").Eq("id", uint64(10000))
+			builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(10000))
 			var v UserLogin
 			NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 
@@ -412,7 +412,7 @@ func testSimpleReadWithPessimisticLock(t *testing.T, typ CacheServerType) {
 	NoError(t, err)
 	tx, err := cache.Begin(txConn)
 	NoError(t, err)
-	builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+	builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
 	var v UserLogin
 	NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 	if v.ID != userLogin.ID {
@@ -424,7 +424,7 @@ func testSimpleReadWithPessimisticLock(t *testing.T, typ CacheServerType) {
 	t.Run("find locked value by another tx", func(t *testing.T) {
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
 		var v UserLogin
 		Error(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 	})
@@ -461,7 +461,7 @@ func testSimpleCreate(t *testing.T, typ CacheServerType) {
 	if userLogin.ID != 1001 {
 		t.Fatal("cannot assign id")
 	}
-	builder := NewQueryBuilder("user_logins").Eq("user_id", uint64(2))
+	builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("user_id", uint64(2))
 	var foundUserLogin UserLogin
 	NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &foundUserLogin))
 
@@ -488,7 +488,7 @@ func testSimpleUpdate(t *testing.T, typ CacheServerType) {
 	tx, err := cache.Begin(txConn)
 	NoError(t, err)
 
-	builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+	builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
 	var v UserLogin
 	NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 
@@ -524,7 +524,7 @@ func testSimpleDelete(t *testing.T, typ CacheServerType) {
 	tx, err := cache.Begin(txConn)
 	NoError(t, err)
 
-	builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+	builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
 	var v UserLogin
 	NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 
@@ -566,7 +566,7 @@ func testCreateWithoutCache(t *testing.T, typ CacheServerType) {
 	if userLogin.ID != 1001 {
 		t.Fatal("cannot insert record")
 	}
-	builder := NewQueryBuilder("user_logins").Eq("user_id", uint64(3)).Eq("user_session_id", uint64(2))
+	builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("user_id", uint64(3)).Eq("user_session_id", uint64(2))
 	var foundUserLogin UserLogin
 	NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &foundUserLogin))
 
@@ -587,7 +587,7 @@ func testQueryBuilder(t *testing.T, typ CacheServerType) {
 		NoError(t, initCache(conn, typ))
 		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 		NoError(t, slc.WarmUp(conn))
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 			In("user_id", []uint64{1, 2, 3, 4, 5}).
 			Eq("user_session_id", uint64(1))
 		queries, err := builder.BuildWithIndex(slc.valueFactory, slc.indexes, slc.typ)
@@ -606,7 +606,7 @@ func testQueryBuilder(t *testing.T, typ CacheServerType) {
 		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 		NoError(t, slc.WarmUp(conn))
 
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 			In("user_id", []uint64{1, 2, 3, 4, 5}).
 			Eq("created_at", nil)
 		queries, err := builder.BuildWithIndex(slc.valueFactory, slc.indexes, slc.typ)
@@ -636,7 +636,7 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 		NoError(t, slc.cacheServer.Flush())
 		NoError(t, slc.WarmUp(conn))
 
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 			In("user_id", []uint64{1, 2, 3, 4, 5}).
 			Eq("login_param_id", uint64(1))
 
@@ -667,7 +667,7 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 					t.Fatal("cannot work FindByQueryBuilder")
 				}
 				t.Run("duplicated values", func(t *testing.T) {
-					builder := NewQueryBuilder("user_logins").
+					builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 						In("user_id", []uint64{1, 2, 3, 4, 5, 1, 2, 3, 4, 5}).
 						Eq("login_param_id", uint64(1))
 					var userLogins UserLogins
@@ -696,7 +696,7 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 		NoError(t, slc.cacheServer.Flush())
 		NoError(t, slc.WarmUp(conn))
 
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 			In("user_id", []uint64{1, 2, 3, 4, 5}).
 			Eq("user_session_id", uint64(1))
 		txConn, err := conn.Begin()
@@ -727,7 +727,7 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 			NoError(t, tx.CommitCacheOnly())
 		}
 
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 			In("user_id", []uint64{1, 2, 3, 4, 5, 6}).
 			Eq("user_session_id", uint64(1))
 		txConn, err := conn.Begin()
@@ -787,7 +787,7 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 			NoError(t, tx.Commit())
 		}
 		{
-			builder := NewQueryBuilder("user_logins").
+			builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 				Eq("user_id", uint64(5)).
 				In("login_param_id", []uint64{1, 2})
 			txConn, err := conn.Begin()
@@ -813,7 +813,7 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 			NoError(t, tx.CommitCacheOnly())
 		}
 
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 			Eq("user_id", uint64(5)).
 			In("login_param_id", []uint64{1, 2})
 		txConn, err := conn.Begin()
@@ -842,7 +842,7 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 
 		var userLogin *UserLogin
 		{
-			builder := NewQueryBuilder("user_logins").
+			builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 				In("user_id", []uint64{1, 2, 3, 4, 5}).
 				Eq("user_session_id", uint64(1))
 			var userLogins UserLogins
@@ -853,14 +853,14 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 			}
 			userLogin = userLogins[0]
 		}
-		updateBuilder := NewQueryBuilder("user_logins").Eq("id", userLogin.ID)
+		updateBuilder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", userLogin.ID)
 		updateMap := map[string]interface{}{
 			"login_param_id": uint64(5),
 		}
 		NoError(t, slc.UpdateByQueryBuilder(context.Background(), tx, updateBuilder, updateMap))
 
 		{
-			builder := NewQueryBuilder("user_logins").
+			builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 				Eq("user_id", userLogin.UserID).
 				Eq("login_param_id", uint64(5))
 			var userLogins UserLogins
@@ -903,7 +903,7 @@ func testUpdateByQueryBuilder(t *testing.T, typ CacheServerType) {
 		NoError(t, err)
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 			In("user_id", []uint64{1, 2, 3, 4, 5}).
 			Eq("user_session_id", uint64(1))
 		name := fmt.Sprintf("rapidash_%d", 2)
@@ -919,7 +919,7 @@ func testUpdateByQueryBuilder(t *testing.T, typ CacheServerType) {
 		NoError(t, tx.Commit())
 	})
 	t.Run("unavailable cache", func(t *testing.T) {
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 			Gte("user_id", uint64(6)).
 			Lte("user_id", uint64(10))
 		t.Run("update without cache", func(t *testing.T) {
@@ -936,7 +936,7 @@ func testUpdateByQueryBuilder(t *testing.T, typ CacheServerType) {
 			NoError(t, slc.UpdateByQueryBuilder(context.Background(), tx, builder, updateParam))
 
 			var newUserLogins UserLogins
-			findBuilder := NewQueryBuilder("user_logins").In("user_id", []uint64{6, 7, 8, 9, 10})
+			findBuilder := NewQueryBuilder("user_logins", database.NewDBAdapter()).In("user_id", []uint64{6, 7, 8, 9, 10})
 			NoError(t, slc.FindByQueryBuilder(context.Background(), tx, findBuilder, &newUserLogins))
 
 			Equal(t, len(newUserLogins), 5)
@@ -961,7 +961,7 @@ func testUpdateByQueryBuilder(t *testing.T, typ CacheServerType) {
 			NoError(t, slc.UpdateByQueryBuilder(context.Background(), tx, builder, updateParam))
 
 			var newUserLogins UserLogins
-			findBuilder := NewQueryBuilder("user_logins").In("user_id", []uint64{6, 7, 8, 9, 10})
+			findBuilder := NewQueryBuilder("user_logins", database.NewDBAdapter()).In("user_id", []uint64{6, 7, 8, 9, 10})
 			NoError(t, slc.FindByQueryBuilder(context.Background(), tx, findBuilder, &newUserLogins))
 			Equal(t, len(newUserLogins), 5)
 			for _, userLogin := range newUserLogins {
@@ -988,7 +988,7 @@ func testUpdateUniqueKeyColumn(t *testing.T, typ CacheServerType) {
 	NoError(t, slc.cacheServer.Flush())
 	NoError(t, slc.WarmUp(conn))
 
-	builder := NewQueryBuilder("user_logins").
+	builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 		In("user_id", []uint64{1, 2, 3, 4, 5}).
 		Eq("login_param_id", uint64(1))
 	txConn, err := conn.Begin()
@@ -1000,7 +1000,7 @@ func testUpdateUniqueKeyColumn(t *testing.T, typ CacheServerType) {
 	}
 	NoError(t, slc.UpdateByQueryBuilder(context.Background(), tx, builder, updateParam))
 	{
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 			In("user_id", []uint64{1, 2, 3, 4, 5}).
 			Eq("login_param_id", uint64(10))
 		var newUserLogins UserLogins
@@ -1024,7 +1024,7 @@ func testUpdateKeyColumn(t *testing.T, typ CacheServerType) {
 	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 	NoError(t, slc.cacheServer.Flush())
 	NoError(t, slc.WarmUp(conn))
-	builder := NewQueryBuilder("user_logins").
+	builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 		In("user_id", []uint64{1, 2, 3, 4, 5}).
 		Eq("user_session_id", uint64(1))
 	txConn, err := conn.Begin()
@@ -1036,7 +1036,7 @@ func testUpdateKeyColumn(t *testing.T, typ CacheServerType) {
 	}
 	NoError(t, slc.UpdateByQueryBuilder(context.Background(), tx, builder, updateParam))
 	{
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 			In("user_id", []uint64{1, 2, 3, 4, 5}).
 			Eq("user_session_id", uint64(10))
 		var newUserLogins UserLogins
@@ -1062,7 +1062,7 @@ func TestUniqueIndexColumnUpdateByPrimaryKey(t *testing.T) {
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
 
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 			Eq("user_id", uint64(1)).
 			Eq("user_session_id", uint64(1))
 
@@ -1073,7 +1073,7 @@ func TestUniqueIndexColumnUpdateByPrimaryKey(t *testing.T) {
 			t.Fatal("failed to get value by index key")
 		}
 
-		builder = NewQueryBuilder("user_logins").
+		builder = NewQueryBuilder("user_logins", database.NewDBAdapter()).
 			Eq("user_id", uint64(1)).
 			Eq("user_session_id", uint64(2))
 
@@ -1095,7 +1095,7 @@ func TestUniqueIndexColumnUpdateByPrimaryKey(t *testing.T) {
 		updateParam := map[string]interface{}{
 			"user_session_id": uint64(2),
 		}
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
 		NoError(t, slc.UpdateByQueryBuilder(context.Background(), tx, builder, updateParam))
 		NoError(t, tx.Commit())
 	}
@@ -1106,7 +1106,7 @@ func TestUniqueIndexColumnUpdateByPrimaryKey(t *testing.T) {
 		NoError(t, err)
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 			Eq("user_id", uint64(1)).
 			Eq("user_session_id", uint64(1))
 
@@ -1124,7 +1124,7 @@ func TestUniqueIndexColumnUpdateByPrimaryKey(t *testing.T) {
 		NoError(t, err)
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 			Eq("user_id", uint64(1)).
 			Eq("user_session_id", uint64(2))
 
@@ -1151,7 +1151,7 @@ func TestIndexColumnUpdateByPrimaryKey(t *testing.T) {
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
 
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 			Eq("user_id", uint64(1)).
 			Eq("login_param_id", uint64(1))
 
@@ -1162,7 +1162,7 @@ func TestIndexColumnUpdateByPrimaryKey(t *testing.T) {
 			t.Fatal("failed to get value by index key")
 		}
 
-		builder = NewQueryBuilder("user_logins").
+		builder = NewQueryBuilder("user_logins", database.NewDBAdapter()).
 			Eq("user_id", uint64(1)).
 			Eq("login_param_id", uint64(2))
 
@@ -1184,7 +1184,7 @@ func TestIndexColumnUpdateByPrimaryKey(t *testing.T) {
 		updateParam := map[string]interface{}{
 			"login_param_id": uint64(2),
 		}
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
 		NoError(t, slc.UpdateByQueryBuilder(context.Background(), tx, builder, updateParam))
 		NoError(t, tx.Commit())
 	}
@@ -1195,7 +1195,7 @@ func TestIndexColumnUpdateByPrimaryKey(t *testing.T) {
 		NoError(t, err)
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 			Eq("user_id", uint64(1)).
 			Eq("login_param_id", uint64(1))
 
@@ -1213,7 +1213,7 @@ func TestIndexColumnUpdateByPrimaryKey(t *testing.T) {
 		NoError(t, err)
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 			Eq("user_id", uint64(1)).
 			Eq("login_param_id", uint64(2))
 
@@ -1240,7 +1240,7 @@ func TestLockingRead(t *testing.T) {
 
 	// store cache to stash
 	{
-		builder := NewQueryBuilder("user_logins").Eq("user_id", uint64(1))
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("user_id", uint64(1))
 
 		var userLogin UserLogin
 		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &userLogin))
@@ -1261,7 +1261,7 @@ func TestLockingRead(t *testing.T) {
 		updateParam := map[string]interface{}{
 			"login_param_id": uint64(2),
 		}
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
 		NoError(t, slc.UpdateByQueryBuilder(context.Background(), tx, builder, updateParam))
 		NoError(t, tx.Commit())
 	}
@@ -1270,7 +1270,7 @@ func TestLockingRead(t *testing.T) {
 	// in this case, cannot get updated value in normal query,
 	// but if use locking read query, could read updated value.
 	{
-		builder := NewQueryBuilder("user_logins").Eq("user_id", uint64(1)).ForUpdate()
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("user_id", uint64(1)).ForUpdate()
 
 		var userLogin UserLogin
 		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &userLogin))
@@ -1297,7 +1297,7 @@ func testDeleteByQueryBuilder(t *testing.T, typ CacheServerType) {
 	NoError(t, slc.WarmUp(conn))
 	t.Run("cache is available", func(t *testing.T) {
 		NoError(t, initUserLoginTable(conn))
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 			In("user_id", []uint64{1, 2, 3, 4, 5}).
 			Eq("user_session_id", uint64(1))
 		txConn, err := conn.Begin()
@@ -1310,7 +1310,7 @@ func testDeleteByQueryBuilder(t *testing.T, typ CacheServerType) {
 
 	t.Run("not available cache", func(t *testing.T) {
 		NoError(t, initUserLoginTable(conn))
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 			Gte("user_session_id", uint64(1)).
 			Lte("user_session_id", uint64(3))
 		txConn, err := conn.Begin()
@@ -1320,7 +1320,7 @@ func testDeleteByQueryBuilder(t *testing.T, typ CacheServerType) {
 		NoError(t, slc.DeleteByQueryBuilder(context.Background(), tx, builder))
 
 		var userLogins UserLogins
-		findBuilder := NewQueryBuilder("user_logins").
+		findBuilder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 			Eq("user_id", uint64(1)).
 			In("user_session_id", []uint64{1, 2, 3})
 		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, findBuilder, &userLogins))
@@ -1332,7 +1332,7 @@ func testDeleteByQueryBuilder(t *testing.T, typ CacheServerType) {
 
 	t.Run("delete by primary keys", func(t *testing.T) {
 		NoError(t, initUserLoginTable(conn))
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 			In("id", []uint64{1, 2, 3, 4, 5})
 		txConn, err := conn.Begin()
 		NoError(t, err)
@@ -1369,7 +1369,7 @@ func testRawQuery(t *testing.T, typ CacheServerType) {
 
 	defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 	t.Run("raw query", func(t *testing.T) {
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 			SQL("ORDER BY id DESC LIMIT ? OFFSET ?", 3, 1)
 		var userLogins UserLogins
 		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &userLogins))
@@ -1381,7 +1381,7 @@ func testRawQuery(t *testing.T, typ CacheServerType) {
 		}
 	})
 	t.Run("all query", func(t *testing.T) {
-		builder := NewQueryBuilder("user_logins")
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter())
 		var userLogins UserLogins
 		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &userLogins))
 		if len(userLogins) != 1000 {
@@ -1587,7 +1587,7 @@ func TestPointerType(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.Rollback()) }()
 
-		builder := NewQueryBuilder("ptr").Eq("id", uint64(1))
+		builder := NewQueryBuilder("ptr", database.NewDBAdapter()).Eq("id", uint64(1))
 		var v PtrType
 		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 		if v.id != 1 {
@@ -1602,7 +1602,7 @@ func TestPointerType(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.Rollback()) }()
 
-		builder := NewQueryBuilder("ptr").Eq("id", uint64(2))
+		builder := NewQueryBuilder("ptr", database.NewDBAdapter()).Eq("id", uint64(2))
 		var v PtrType
 		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 		if v.id != 2 {
@@ -1623,7 +1623,7 @@ func TestPointerType(t *testing.T) {
 			t.Fatal("cannot insert invalid value")
 		}
 		var foundValue PtrType
-		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, NewQueryBuilder("ptr").Eq("id", uint64(id)), &foundValue))
+		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, NewQueryBuilder("ptr", database.NewDBAdapter()).Eq("id", uint64(id)), &foundValue))
 		// set invalid value to cache server
 		NoError(t, tx.Commit())
 
@@ -1635,7 +1635,7 @@ func TestPointerType(t *testing.T) {
 			defer func() { NoError(t, tx.Rollback()) }()
 
 			var foundValue PtrType
-			NoError(t, slc.FindByQueryBuilder(context.Background(), tx, NewQueryBuilder("ptr").Eq("id", uint64(id)), &foundValue))
+			NoError(t, slc.FindByQueryBuilder(context.Background(), tx, NewQueryBuilder("ptr", database.NewDBAdapter()).Eq("id", uint64(id)), &foundValue))
 		})
 	})
 	t.Run("update valid value", func(t *testing.T) {
@@ -1664,12 +1664,12 @@ func TestPointerType(t *testing.T) {
 
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 		var foundValue PtrType
-		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, NewQueryBuilder("ptr").Eq("id", uint64(1)), &foundValue))
+		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, NewQueryBuilder("ptr", database.NewDBAdapter()).Eq("id", uint64(1)), &foundValue))
 
 		if foundValue.id == 0 {
 			t.Fatal("cannot find value")
 		}
-		builder := NewQueryBuilder("ptr").Eq("id", foundValue.id)
+		builder := NewQueryBuilder("ptr", database.NewDBAdapter()).Eq("id", foundValue.id)
 		t.Run("not pointer value map", func(t *testing.T) {
 			updateMap := map[string]interface{}{
 				"intptr":     intValue,
@@ -1752,27 +1752,27 @@ func TestPointerType(t *testing.T) {
 		defer func() { NoError(t, tx.Rollback()) }()
 
 		var ptr PtrType
-		builder := NewQueryBuilder("ptr").Eq("id", uint64(2))
+		builder := NewQueryBuilder("ptr", database.NewDBAdapter()).Eq("id", uint64(2))
 		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &ptr))
 		t.Run("pointer value query", func(t *testing.T) {
 			builders := []*QueryBuilder{
-				NewQueryBuilder("ptr").Eq("id", &ptr.id),
-				NewQueryBuilder("ptr").Eq("intptr", ptr.intPtr),
-				NewQueryBuilder("ptr").Eq("int8ptr", ptr.int8Ptr),
-				NewQueryBuilder("ptr").Eq("int16ptr", ptr.int16Ptr),
-				NewQueryBuilder("ptr").Eq("int32ptr", ptr.int32Ptr),
-				NewQueryBuilder("ptr").Eq("int64ptr", ptr.int64Ptr),
-				NewQueryBuilder("ptr").Eq("uintptr", ptr.uintPtr),
-				NewQueryBuilder("ptr").Eq("uint8ptr", ptr.uint8Ptr),
-				NewQueryBuilder("ptr").Eq("uint16ptr", ptr.uint16Ptr),
-				NewQueryBuilder("ptr").Eq("uint32ptr", ptr.uint32Ptr),
-				NewQueryBuilder("ptr").Eq("uint64ptr", ptr.uint64Ptr),
-				NewQueryBuilder("ptr").Eq("float32ptr", ptr.float32Ptr),
-				NewQueryBuilder("ptr").Eq("float64ptr", ptr.float64Ptr),
-				NewQueryBuilder("ptr").Eq("boolptr", ptr.boolPtr),
-				NewQueryBuilder("ptr").Eq("bytesptr", ptr.bytesPtr),
-				NewQueryBuilder("ptr").Eq("stringptr", ptr.stringPtr),
-				NewQueryBuilder("ptr").Eq("timeptr", ptr.timePtr),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).Eq("id", &ptr.id),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).Eq("intptr", ptr.intPtr),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).Eq("int8ptr", ptr.int8Ptr),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).Eq("int16ptr", ptr.int16Ptr),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).Eq("int32ptr", ptr.int32Ptr),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).Eq("int64ptr", ptr.int64Ptr),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).Eq("uintptr", ptr.uintPtr),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).Eq("uint8ptr", ptr.uint8Ptr),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).Eq("uint16ptr", ptr.uint16Ptr),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).Eq("uint32ptr", ptr.uint32Ptr),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).Eq("uint64ptr", ptr.uint64Ptr),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).Eq("float32ptr", ptr.float32Ptr),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).Eq("float64ptr", ptr.float64Ptr),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).Eq("boolptr", ptr.boolPtr),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).Eq("bytesptr", ptr.bytesPtr),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).Eq("stringptr", ptr.stringPtr),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).Eq("timeptr", ptr.timePtr),
 			}
 			for _, builder := range builders {
 				var v PtrType
@@ -1782,22 +1782,22 @@ func TestPointerType(t *testing.T) {
 		})
 		t.Run("IN condition query", func(t *testing.T) {
 			builders := []*QueryBuilder{
-				NewQueryBuilder("ptr").In("intptr", []int{1}),
-				NewQueryBuilder("ptr").In("int8ptr", []int8{2}),
-				NewQueryBuilder("ptr").In("int16ptr", []int16{3}),
-				NewQueryBuilder("ptr").In("int32ptr", []int32{4}),
-				NewQueryBuilder("ptr").In("int64ptr", []int64{5}),
-				NewQueryBuilder("ptr").In("uintptr", []uint{6}),
-				NewQueryBuilder("ptr").In("uint8ptr", []uint8{7}),
-				NewQueryBuilder("ptr").In("uint16ptr", []uint16{8}),
-				NewQueryBuilder("ptr").In("uint32ptr", []uint32{9}),
-				NewQueryBuilder("ptr").In("uint64ptr", []uint64{10}),
-				NewQueryBuilder("ptr").In("float32ptr", []float32{1.23}),
-				NewQueryBuilder("ptr").In("float64ptr", []float64{4.56}),
-				NewQueryBuilder("ptr").In("boolptr", []bool{true}),
-				NewQueryBuilder("ptr").In("bytesptr", [][]byte{[]byte("bytes")}),
-				NewQueryBuilder("ptr").In("stringptr", []string{"string"}),
-				NewQueryBuilder("ptr").In("timeptr", []time.Time{*ptr.timePtr}),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).In("intptr", []int{1}),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).In("int8ptr", []int8{2}),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).In("int16ptr", []int16{3}),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).In("int32ptr", []int32{4}),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).In("int64ptr", []int64{5}),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).In("uintptr", []uint{6}),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).In("uint8ptr", []uint8{7}),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).In("uint16ptr", []uint16{8}),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).In("uint32ptr", []uint32{9}),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).In("uint64ptr", []uint64{10}),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).In("float32ptr", []float32{1.23}),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).In("float64ptr", []float64{4.56}),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).In("boolptr", []bool{true}),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).In("bytesptr", [][]byte{[]byte("bytes")}),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).In("stringptr", []string{"string"}),
+				NewQueryBuilder("ptr", database.NewDBAdapter()).In("timeptr", []time.Time{*ptr.timePtr}),
 			}
 			for _, builder := range builders {
 				var v PtrType
@@ -1844,7 +1844,7 @@ func BenchmarkSLCIN_SimpleMemcachedAccess(b *testing.B) {
 	if err := slc.WarmUp(conn); err != nil {
 		panic(err)
 	}
-	builder := NewQueryBuilder("user_logins").
+	builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 		In("user_id", []uint64{1, 2, 3, 4, 5}).
 		Eq("user_session_id", uint64(1))
 	tx, err := cache.Begin(conn)
@@ -1890,7 +1890,7 @@ func BenchmarkSLCIN_SimpleRedisAccess(b *testing.B) {
 	if err := slc.WarmUp(conn); err != nil {
 		panic(err)
 	}
-	builder := NewQueryBuilder("user_logins").
+	builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 		In("user_id", []uint64{1, 2, 3, 4, 5}).
 		Eq("user_session_id", uint64(1))
 	tx, err := cache.Begin(conn)
@@ -1993,7 +1993,7 @@ func benchmarkSLCINRapidash(b *testing.B) {
 		panic(err)
 	}
 	b.ResetTimer()
-	builder := NewQueryBuilder("user_logins").
+	builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 		In("user_id", []uint64{1, 2, 3, 4, 5}).
 		Eq("user_session_id", uint64(1))
 	userLogins := []*UserLogin{}
@@ -2019,7 +2019,7 @@ func benchmarkSLCINRapidash(b *testing.B) {
 func TestCountQuerySLC(t *testing.T) {
 	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 	NoError(t, slc.WarmUp(conn))
-	builder := NewQueryBuilder("user_logins").
+	builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 		Eq("user_id", uint64(1))
 	tx, err := cache.Begin(conn)
 	if err != nil {
@@ -2035,7 +2035,7 @@ func TestCountQuerySLC(t *testing.T) {
 func TestCountByQueryBuilderCaseDatabaseRecordIsEmptySLC(t *testing.T) {
 	slc := NewSecondLevelCache(emptyType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(database.MySQL))
 	NoError(t, slc.WarmUp(conn))
-	builder := NewQueryBuilder("empties").Eq("id", uint64(1))
+	builder := NewQueryBuilder("empties", database.NewDBAdapter()).Eq("id", uint64(1))
 	tx, err := cache.Begin(conn)
 	if err != nil {
 		panic(err)

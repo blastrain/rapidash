@@ -6,7 +6,6 @@ import (
 
 	"github.com/knocknote/vitess-sqlparser/sqlparser"
 	"go.knocknote.io/rapidash/database"
-	"go.knocknote.io/rapidash/database/mysql"
 	"go.knocknote.io/rapidash/server"
 	"golang.org/x/xerrors"
 )
@@ -543,14 +542,14 @@ type QueryBuilder struct {
 	cachedQueries   *Queries
 }
 
-func NewQueryBuilder(tableName string) *QueryBuilder {
+func NewQueryBuilder(tableName string, adapter database.Adapter) *QueryBuilder {
 	return &QueryBuilder{
 		tableName: tableName,
 		conditions: &Conditions{
 			conditions: []Condition{},
 		},
 		orderConditions: []*OrderCondition{},
-		adapter:         &mysql.MySQL{},
+		adapter:         adapter,
 	}
 }
 

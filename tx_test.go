@@ -13,6 +13,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
+	"go.knocknote.io/rapidash/database"
 	"golang.org/x/xerrors"
 )
 
@@ -322,11 +323,11 @@ func TestTx_CreateByTableContext(t *testing.T) {
 		NoError(t, err)
 		NotEqualf(t, id, 0, "last insert id is zero")
 		var findUserFromSLCByPrimaryKey UserLogin
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(0))
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(0))
 		NoError(t, tx.FindByQueryBuilder(builder, &findUserFromSLCByPrimaryKey))
 		Equal(t, findUserFromSLCByPrimaryKey.ID, userLogin.ID)
 		var findUserFromSLCByUniqueKey UserLogin
-		builder = NewQueryBuilder("user_logins").Eq("user_id", uint64(0)).Eq("user_session_id", uint64(1000))
+		builder = NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("user_id", uint64(0)).Eq("user_session_id", uint64(1000))
 		NoError(t, tx.FindByQueryBuilder(builder, &findUserFromSLCByUniqueKey))
 		Equal(t, findUserFromSLCByPrimaryKey.ID, userLogin.ID)
 		NoError(t, tx.Commit())
@@ -350,7 +351,7 @@ func TestTx_FindByQueryBuilderContext(t *testing.T) {
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 		NoError(t, tx.Commit())
 
-		builder := NewQueryBuilder("events")
+		builder := NewQueryBuilder("events", database.NewDBAdapter())
 		var events EventSlice
 		if err := tx.FindByQueryBuilderContext(context.Background(), builder, &events); err != nil {
 			if !xerrors.Is(err, ErrAlreadyCommittedTransaction) {
@@ -365,7 +366,7 @@ func TestTx_FindByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("events")
+		builder := NewQueryBuilder("events", database.NewDBAdapter())
 		var events EventSlice
 		NoError(t, tx.FindByQueryBuilderContext(context.Background(), builder, &events))
 		NoError(t, tx.Commit())
@@ -375,7 +376,7 @@ func TestTx_FindByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
 		var userLogin UserLogin
 		NoError(t, tx.FindByQueryBuilderContext(context.Background(), builder, &userLogin))
 		NoError(t, tx.Commit())
@@ -385,7 +386,7 @@ func TestTx_FindByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("user_logins")
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter())
 		var userLogins UserLogins
 		if err := tx.FindByQueryBuilderContext(context.Background(), builder, &userLogins); err != nil {
 			if !xerrors.Is(err, ErrConnectionOfTransaction) {
@@ -400,7 +401,7 @@ func TestTx_FindByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("users")
+		builder := NewQueryBuilder("users", database.NewDBAdapter())
 		var userLogins UserLogins
 		if err := tx.FindByQueryBuilderContext(context.Background(), builder, &userLogins); err == nil {
 			t.Fatal("err is nil\n")
@@ -410,7 +411,7 @@ func TestTx_FindByQueryBuilderContext(t *testing.T) {
 		tx, err := cache.Begin(conn)
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
-		builder := NewQueryBuilder("user_logs").Eq("id", uint64(1)).Gte("content_id", uint64(1)).Lte("content_id", uint64(1))
+		builder := NewQueryBuilder("user_logs", database.NewDBAdapter()).Eq("id", uint64(1)).Gte("content_id", uint64(1)).Lte("content_id", uint64(1))
 		var userLogs UserLogs
 		NoError(t, tx.FindByQueryBuilderContext(context.Background(), builder, &userLogs))
 		NoError(t, tx.Commit())
@@ -428,7 +429,7 @@ func TestTx_CountByQueryBuilder(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("events")
+		builder := NewQueryBuilder("events", database.NewDBAdapter())
 		count, err := tx.CountByQueryBuilder(builder)
 		NoError(t, err)
 		NotEqualf(t, count, 0, "failed count")
@@ -439,7 +440,7 @@ func TestTx_CountByQueryBuilder(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("user_logins")
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter())
 		count, err := tx.CountByQueryBuilder(builder)
 		NoError(t, err)
 		NotEqualf(t, count, 0, "failed count")
@@ -450,7 +451,7 @@ func TestTx_CountByQueryBuilder(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("unknown")
+		builder := NewQueryBuilder("unknown", database.NewDBAdapter())
 		if _, err := tx.CountByQueryBuilder(builder); err == nil {
 			t.Fatal("err is nil")
 		}
@@ -463,7 +464,7 @@ func TestTx_FindAllByTable(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("events")
+		builder := NewQueryBuilder("events", database.NewDBAdapter())
 		count, err := tx.CountByQueryBuilder(builder)
 		NoError(t, err)
 		var events EventSlice
@@ -471,7 +472,7 @@ func TestTx_FindAllByTable(t *testing.T) {
 
 		Equalf(t, len(events), int(count), "invalid events length")
 
-		builder = NewQueryBuilder("user_logins")
+		builder = NewQueryBuilder("user_logins", database.NewDBAdapter())
 		count, err = tx.CountByQueryBuilder(builder)
 		NoError(t, err)
 		var userLogins UserLogins
@@ -498,14 +499,14 @@ func TestTx_UpdateByQueryBuilder(t *testing.T) {
 	NoError(t, err)
 	defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-	findBuilder := NewQueryBuilder("user_logins").
+	findBuilder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 		Eq("user_id", uint64(1)).
 		Eq("user_session_id", uint64(1))
 	var userLogin UserLogin
 	NoError(t, tx.FindByQueryBuilder(findBuilder, &userLogin))
 	NotEqualf(t, userLogin.ID, 0, "cannot find userLogin")
 
-	builder := NewQueryBuilder("user_logins").Eq("id", userLogin.ID)
+	builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", userLogin.ID)
 	NoError(t, tx.UpdateByQueryBuilder(builder, map[string]interface{}{
 		"login_param_id": uint64(10),
 	}))
@@ -521,7 +522,7 @@ func TestTx_UpdateByQueryBuilderContext(t *testing.T) {
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 		NoError(t, tx.Commit())
 
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
 		if err := tx.UpdateByQueryBuilderContext(context.Background(), builder, map[string]interface{}{
 			"login_param_id": uint64(10),
 		}); err != nil {
@@ -539,7 +540,7 @@ func TestTx_UpdateByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("events").Eq("id", uint64(1))
+		builder := NewQueryBuilder("events", database.NewDBAdapter()).Eq("id", uint64(1))
 		var event Event
 		NoError(t, tx.FindByQueryBuilder(builder, &event))
 		NotEqualf(t, event.ID, 0, "cannot find event")
@@ -555,7 +556,7 @@ func TestTx_UpdateByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
 		if err := tx.UpdateByQueryBuilderContext(context.Background(), builder, map[string]interface{}{
 			"login_param_id": uint64(10),
 		}); err != nil {
@@ -573,14 +574,14 @@ func TestTx_UpdateByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		findBuilder := NewQueryBuilder("user_logins").
+		findBuilder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 			Eq("user_id", uint64(1)).
 			Eq("user_session_id", uint64(1))
 		var userLogin UserLogin
 		NoError(t, tx.FindByQueryBuilder(findBuilder, &userLogin))
 		NotEqualf(t, userLogin.ID, 0, "cannot find userLogin")
 
-		builder := NewQueryBuilder("user_logins").Eq("id", userLogin.ID)
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", userLogin.ID)
 		NoError(t, tx.UpdateByQueryBuilderContext(context.Background(), builder, map[string]interface{}{
 			"login_param_id": uint64(10),
 		}))
@@ -593,7 +594,7 @@ func TestTx_UpdateByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("rapidash").Eq("id", uint64(1))
+		builder := NewQueryBuilder("rapidash", database.NewDBAdapter()).Eq("id", uint64(1))
 		if err := tx.UpdateByQueryBuilderContext(context.Background(), builder, map[string]interface{}{
 			"start_week": uint8(10),
 		}); err == nil {
@@ -609,14 +610,14 @@ func TestTx_DeleteByQueryBuilder(t *testing.T) {
 	NoError(t, err)
 	defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-	findBuilder := NewQueryBuilder("user_logins").
+	findBuilder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 		Eq("user_id", uint64(1)).
 		Eq("user_session_id", uint64(1))
 	var userLogin UserLogin
 	NoError(t, tx.FindByQueryBuilder(findBuilder, &userLogin))
 	NotEqualf(t, userLogin.ID, 0, "cannot find userLogin")
 
-	builder := NewQueryBuilder("user_logins").Eq("id", userLogin.ID)
+	builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", userLogin.ID)
 	NoError(t, tx.DeleteByQueryBuilder(builder))
 	NoError(t, tx.Commit())
 }
@@ -630,7 +631,7 @@ func TestTx_DeleteByQueryBuilderContext(t *testing.T) {
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 		NoError(t, tx.Commit())
 
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
 		if err := tx.DeleteByQueryBuilderContext(context.Background(), builder); err != nil {
 			if !xerrors.Is(err, ErrAlreadyCommittedTransaction) {
 				t.Fatalf("unexpected type err: %+v", err)
@@ -646,7 +647,7 @@ func TestTx_DeleteByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("events").Eq("id", uint64(1))
+		builder := NewQueryBuilder("events", database.NewDBAdapter()).Eq("id", uint64(1))
 		var event Event
 		NoError(t, tx.FindByQueryBuilder(builder, &event))
 		NotEqualf(t, event.ID, 0, "cannot find event")
@@ -660,7 +661,7 @@ func TestTx_DeleteByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", uint64(1))
 		if err := tx.DeleteByQueryBuilderContext(context.Background(), builder); err != nil {
 			if !xerrors.Is(err, ErrConnectionOfTransaction) {
 				t.Fatalf("unexpected type err: %+v", err)
@@ -676,14 +677,14 @@ func TestTx_DeleteByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		findBuilder := NewQueryBuilder("user_logins").
+		findBuilder := NewQueryBuilder("user_logins", database.NewDBAdapter()).
 			Eq("user_id", uint64(1)).
 			Eq("user_session_id", uint64(1))
 		var userLogin UserLogin
 		NoError(t, tx.FindByQueryBuilder(findBuilder, &userLogin))
 		NotEqualf(t, userLogin.ID, 0, "cannot find userLogin")
 
-		builder := NewQueryBuilder("user_logins").Eq("id", userLogin.ID)
+		builder := NewQueryBuilder("user_logins", database.NewDBAdapter()).Eq("id", userLogin.ID)
 		NoError(t, tx.DeleteByQueryBuilderContext(context.Background(), builder))
 		NoError(t, tx.Commit())
 	})
@@ -694,7 +695,7 @@ func TestTx_DeleteByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("rapidash").Eq("id", uint64(1))
+		builder := NewQueryBuilder("rapidash", database.NewDBAdapter()).Eq("id", uint64(1))
 		if err := tx.DeleteByQueryBuilderContext(context.Background(), builder); err == nil {
 			t.Fatalf("err is nil")
 		}
