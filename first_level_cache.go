@@ -101,7 +101,7 @@ func (c *FirstLevelCache) loadAll(conn *sql.DB) (*sql.Rows, error) {
 	columns := c.typ.Columns()
 	escapedColumns := make([]string, len(columns))
 	for idx, column := range columns {
-		escapedColumns[idx] = c.adapter.Escape(column)
+		escapedColumns[idx] = c.adapter.Quote(column)
 	}
 	query := fmt.Sprintf("SELECT %s FROM %s", strings.Join(escapedColumns, ","), c.typ.tableName)
 	rows, err := conn.Query(query)

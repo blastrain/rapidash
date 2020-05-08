@@ -26,7 +26,7 @@ func (p *Postgres) Placeholders(length int) string {
 	return sb.String()
 }
 
-func (p *Postgres) Escape(s string) string {
+func (p *Postgres) Quote(s string) string {
 	return fmt.Sprintf(`"%s"`, s)
 }
 

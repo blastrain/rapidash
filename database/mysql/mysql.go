@@ -37,6 +37,6 @@ func (ms *MySQL) Placeholders(length int) string {
 	return sb.String()
 }
 
-func (p *MySQL) Escape(s string) string {
+func (p *MySQL) Quote(s string) string {
 	return fmt.Sprintf("`%s`", s)
 }

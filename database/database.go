@@ -24,7 +24,7 @@ type Adapter interface {
 	TableDDL(*sql.DB, string) (string, error)
 	Placeholder(int) string
 	Placeholders(int) string
-	Escape(string) string
+	Quote(string) string
 }
 
 func NewDBAdapter() Adapter {

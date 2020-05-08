@@ -375,18 +375,18 @@ func (q *Queries) FindCacheMissQueryByStructValue(value *StructValue) *Query {
 func (q *Queries) CacheMissQueriesToSQL(typ *Struct) (string, []interface{}) {
 	escapedColumns := []string{}
 	for _, column := range typ.Columns() {
-		escapedColumns = append(escapedColumns, q.adapter.Escape(column))
+		escapedColumns = append(escapedColumns, q.adapter.Quote(column))
 	}
 	if q.rawSQL != "" {
 		return fmt.Sprintf("SELECT %s FROM %s %s",
 			strings.Join(escapedColumns, ","),
-			q.adapter.Escape(q.tableName),
+			q.adapter.Quote(q.tableName),
 			q.rawSQL,
 		), q.rawSQLValues
 	} else if q.isAllSQL {
 		return fmt.Sprintf("SELECT %s FROM %s",
 			strings.Join(escapedColumns, ","),
-			q.adapter.Escape(q.tableName),
+			q.adapter.Quote(q.tableName),
 		), nil
 	}
 	if len(q.cacheMissQueries) == 0 {
@@ -423,13 +423,13 @@ func (q *Queries) CacheMissQueriesToSQL(typ *Struct) (string, []interface{}) {
 				}
 				placeholders = append(placeholders, "?")
 			}
-			condition = fmt.Sprintf("%s IN (%s)", q.adapter.Escape(column), strings.Join(placeholders, ","))
+			condition = fmt.Sprintf("%s IN (%s)", q.adapter.Quote(column), strings.Join(placeholders, ","))
 		} else {
 			if !value.IsNil {
 				queryArgs = append(queryArgs, value.RawValue())
-				condition = fmt.Sprintf("%s = ?", q.adapter.Escape(column))
+				condition = fmt.Sprintf("%s = ?", q.adapter.Quote(column))
 			} else {
-				condition = fmt.Sprintf("%s IS NULL", q.adapter.Escape(column))
+				condition = fmt.Sprintf("%s IS NULL", q.adapter.Quote(column))
 			}
 
 		}
@@ -441,7 +441,7 @@ func (q *Queries) CacheMissQueriesToSQL(typ *Struct) (string, []interface{}) {
 	}
 	return fmt.Sprintf("SELECT %s FROM %s WHERE %s%s",
 		strings.Join(escapedColumns, ","),
-		q.adapter.Escape(q.tableName),
+		q.adapter.Quote(q.tableName),
 		strings.Join(conditions, " AND "),
 		lockOpt,
 	), queryArgs
@@ -614,7 +614,7 @@ func (b *QueryBuilder) SelectSQL(typ *Struct) (string, []interface{}) {
 	}
 	escapedColumns := []string{}
 	for _, column := range typ.Columns() {
-		escapedColumns = append(escapedColumns, b.adapter.Escape(column))
+		escapedColumns = append(escapedColumns, b.adapter.Quote(column))
 	}
 	lockOpt := b.lockOpt.String()
 	if lockOpt != "" {
@@ -622,7 +622,7 @@ func (b *QueryBuilder) SelectSQL(typ *Struct) (string, []interface{}) {
 	}
 	return fmt.Sprintf("SELECT %s FROM %s WHERE %s%s",
 		strings.Join(escapedColumns, ","),
-		b.adapter.Escape(b.tableName),
+		b.adapter.Quote(b.tableName),
 		strings.Join(where, " AND "),
 		lockOpt,
 	), args
@@ -639,12 +639,12 @@ func (b *QueryBuilder) UpdateSQL(updateMap map[string]interface{}) (string, []in
 	values := []interface{}{}
 	i := 1
 	for k, v := range updateMap {
-		setList = append(setList, fmt.Sprintf("%s = %s", b.adapter.Escape(k), b.adapter.Placeholder(i)))
+		setList = append(setList, fmt.Sprintf("%s = %s", b.adapter.Quote(k), b.adapter.Placeholder(i)))
 		values = append(values, v)
 		i++
 	}
 	values = append(values, args...)
-	return fmt.Sprintf("UPDATE %s SET %s WHERE %s", b.adapter.Escape(b.tableName), strings.Join(setList, ","), strings.Join(where, " AND ")), values
+	return fmt.Sprintf("UPDATE %s SET %s WHERE %s", b.adapter.Quote(b.tableName), strings.Join(setList, ","), strings.Join(where, " AND ")), values
 }
 
 func (b *QueryBuilder) DeleteSQL() (string, []interface{}) {
@@ -654,7 +654,7 @@ func (b *QueryBuilder) DeleteSQL() (string, []interface{}) {
 		where = append(where, condition.Query())
 		args = append(args, condition.QueryArgs()...)
 	}
-	return fmt.Sprintf("DELETE FROM %s WHERE %s", b.adapter.Escape(b.tableName), strings.Join(where, " AND ")), args
+	return fmt.Sprintf("DELETE FROM %s WHERE %s", b.adapter.Quote(b.tableName), strings.Join(where, " AND ")), args
 }
 
 func (b *QueryBuilder) Release() {
@@ -714,7 +714,7 @@ func (b *QueryBuilder) buildAllQuery() *Queries {
 }
 
 func (b *QueryBuilder) buildRawQuery() (*Queries, error) {
-	prefix := fmt.Sprintf("SELECT * FROM %s ", b.adapter.Escape(b.tableName))
+	prefix := fmt.Sprintf("SELECT * FROM %s ", b.adapter.Quote(b.tableName))
 	stmt, err := sqlparser.Parse(prefix + b.sqlCondition.stmt)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to parse %s: %w", prefix+b.sqlCondition.stmt, err)
@@ -974,9 +974,9 @@ func (c *EQCondition) Search(tree *BTree) []Leaf {
 
 func (c *EQCondition) Query() string {
 	if c.rawValue == nil {
-		return fmt.Sprintf("%s IS NULL", c.adapter.Escape(c.column))
+		return fmt.Sprintf("%s IS NULL", c.adapter.Quote(c.column))
 	}
-	return fmt.Sprintf("%s = ?", c.adapter.Escape(c.column))
+	return fmt.Sprintf("%s = ?", c.adapter.Quote(c.column))
 }
 
 func (c *EQCondition) QueryArgs() []interface{} {
@@ -1018,9 +1018,9 @@ func (c *NEQCondition) Value() *Value {
 
 func (c *NEQCondition) Query() string {
 	if c.rawValue == nil {
-		return fmt.Sprintf("%s IS NOT NULL", c.adapter.Escape(c.column))
+		return fmt.Sprintf("%s IS NOT NULL", c.adapter.Quote(c.column))
 	}
-	return fmt.Sprintf("%s != ?", c.adapter.Escape(c.column))
+	return fmt.Sprintf("%s != ?", c.adapter.Quote(c.column))
 }
 
 func (c *NEQCondition) QueryArgs() []interface{} {
@@ -1070,7 +1070,7 @@ func (c *GTCondition) Value() *Value {
 }
 
 func (c *GTCondition) Query() string {
-	return fmt.Sprintf("%s > ?", c.adapter.Escape(c.column))
+	return fmt.Sprintf("%s > ?", c.adapter.Quote(c.column))
 }
 
 func (c *GTCondition) QueryArgs() []interface{} {
@@ -1116,7 +1116,7 @@ func (c *GTECondition) Value() *Value {
 }
 
 func (c *GTECondition) Query() string {
-	return fmt.Sprintf("%s >= ?", c.adapter.Escape(c.column))
+	return fmt.Sprintf("%s >= ?", c.adapter.Quote(c.column))
 }
 
 func (c *GTECondition) QueryArgs() []interface{} {
@@ -1162,7 +1162,7 @@ func (c *LTCondition) Value() *Value {
 }
 
 func (c *LTCondition) Query() string {
-	return fmt.Sprintf("%s < %s", c.adapter.Escape(c.column), c.adapter.Placeholder(1))
+	return fmt.Sprintf("%s < %s", c.adapter.Quote(c.column), c.adapter.Placeholder(1))
 }
 
 func (c *LTCondition) QueryArgs() []interface{} {
@@ -1208,7 +1208,7 @@ func (c *LTECondition) Value() *Value {
 }
 
 func (c *LTECondition) Query() string {
-	return fmt.Sprintf("%s <= %s", c.adapter.Escape(c.column), c.adapter.Placeholder(1))
+	return fmt.Sprintf("%s <= %s", c.adapter.Quote(c.column), c.adapter.Placeholder(1))
 }
 
 func (c *LTECondition) QueryArgs() []interface{} {
@@ -1254,7 +1254,7 @@ func (c *INCondition) Value() *Value {
 }
 
 func (c *INCondition) Query() string {
-	return fmt.Sprintf("%s IN (%s)", c.adapter.Escape(c.column), c.adapter.Placeholders(len(c.values)))
+	return fmt.Sprintf("%s IN (%s)", c.adapter.Quote(c.column), c.adapter.Placeholders(len(c.values)))
 }
 
 func (c *INCondition) QueryArgs() []interface{} {
