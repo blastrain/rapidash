@@ -11,7 +11,7 @@ import (
 type Postgres struct{}
 
 func (p *Postgres) Placeholder(idx int) string {
-	return fmt.Sprintf("$%d", idx+1)
+	return fmt.Sprintf("$%d", idx)
 }
 
 func (p *Postgres) Placeholders(length int) string {
