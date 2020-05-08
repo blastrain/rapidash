@@ -1170,7 +1170,7 @@ func (c *SecondLevelCache) insertSQL(value *StructValue) (string, []interface{})
 	placeholders := []string{}
 	values := []interface{}{}
 	for idx, column := range value.typ.Columns() {
-		escapedColumns = append(escapedColumns, fmt.Sprintf("`%s`", column))
+		escapedColumns = append(escapedColumns, c.adapter.Escape(column))
 		placeholders = append(placeholders, c.adapter.Placeholder(idx+1))
 		if value.fields[column] == nil {
 			values = append(values, nil)
@@ -1178,8 +1178,8 @@ func (c *SecondLevelCache) insertSQL(value *StructValue) (string, []interface{})
 			values = append(values, value.fields[column].RawValue())
 		}
 	}
-	return fmt.Sprintf("INSERT INTO `%s` (%s) VALUES (%s)",
-		c.typ.tableName,
+	return fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
+		c.adapter.Escape(c.typ.tableName),
 		strings.Join(escapedColumns, ","),
 		strings.Join(placeholders, ","),
 	), values
