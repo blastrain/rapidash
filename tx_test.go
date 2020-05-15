@@ -26,16 +26,19 @@ var (
 var (
 	drivers = map[string]struct {
 		Name, Source string
+		DBType       database.DBType
 		Adapter      database.Adapter
 	}{
 		"mysql": {
 			Name:    "mysql",
 			Source:  "root:@tcp(localhost:3306)/rapidash?parseTime=true",
+			DBType:  database.MySQL,
 			Adapter: database.NewAdapterWithDBType(database.MySQL),
 		},
 		"postgres": {
 			Name:    "postgres",
 			Source:  "host=localhost user=root dbname=rapidash sslmode=disable",
+			DBType:  database.Postgres,
 			Adapter: database.NewAdapterWithDBType(database.Postgres),
 		},
 	}
@@ -104,7 +107,8 @@ func initEventTable(conn *sql.DB) error {
 		term := "daytime"
 		eventCategoryID := eventID
 		for j := 0; j < 4; j++ {
-			if _, err := conn.Exec(fmt.Sprintf("insert into events values(%s)", adapter.Placeholders(8)), id, eventID, eventCategoryID, term, startWeek, endWeek, time.Now(), time.Now()); err != nil {
+			query := fmt.Sprintf("INSERT INTO %s values(%s)", adapter.Quote("events"), adapter.Placeholders(8))
+			if _, err := conn.Exec(query, id, eventID, eventCategoryID, term, startWeek, endWeek, time.Now(), time.Now()); err != nil {
 				return xerrors.Errorf("failed to insert into events table: %w", err)
 			}
 			id++
@@ -123,9 +127,11 @@ func initUserLoginTable(conn *sql.DB) error {
 	userSessionID := 1
 	loginParamID := 1
 	name := "rapidash1"
+	adapter := driver.Adapter
+	columns := []string{adapter.Quote("user_id"), adapter.Quote("user_session_id"), adapter.Quote("login_param_id"), adapter.Quote("name"), adapter.Quote("created_at"), adapter.Quote("updated_at")}
 	for ; userID <= 1000; userID++ {
-		if _, err := conn.Exec("INSERT INTO `user_logins` (`user_id`,`user_session_id`,`login_param_id`,`name`,`created_at`,`updated_at`) VALUES (?, ?, ?, ?, ?, ?)",
-			userID, userSessionID, loginParamID, name, time.Now(), time.Now()); err != nil {
+		query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", adapter.Quote("user_logins"), strings.Join(columns, ","), adapter.Placeholders(6))
+		if _, err := conn.Exec(query, userID, userSessionID, loginParamID, name, time.Now(), time.Now()); err != nil {
 			return xerrors.Errorf("failed to insert into user_logins table: %w", err)
 		}
 	}
@@ -136,11 +142,11 @@ func initPtrTable(conn *sql.DB) error {
 	if err := initTable(conn, "ptr"); err != nil {
 		return xerrors.Errorf("failed to exec ptr: %w", err)
 	}
-	if _, err := conn.Exec("INSERT INTO `ptr` () values ()"); err != nil {
+	if _, err := conn.Exec(fmt.Sprintf("INSERT INTO %s VALUES (DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT)", driver.Adapter.Quote("ptr"))); err != nil {
 		return xerrors.Errorf("failed to insert empty record to ptr table: %w", err)
 	}
-	if _, err := conn.Exec(`
-INSERT INTO ptr
+	if _, err := conn.Exec(fmt.Sprintf(`
+INSERT INTO %s
  (
   intptr,
   int8ptr,
@@ -160,8 +166,8 @@ INSERT INTO ptr
   timeptr
  )
   values
- (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-`, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1.23, 4.56, true, "bytes", "string"); err != nil {
+ (%s)
+`, driver.Adapter.Quote("ptr"), driver.Adapter.Placeholders(16)), 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1.23, 4.56, true, "bytes", "string", time.Now()); err != nil {
 		return xerrors.Errorf("failed to insert default value to ptr table: %w", err)
 	}
 	return nil
@@ -171,7 +177,9 @@ func initUserLogTable(conn *sql.DB) error {
 	if err := initTable(conn, "user_logs"); err != nil {
 		return xerrors.Errorf("failed to exec user_logs: %w", err)
 	}
-	if _, err := conn.Exec("INSERT INTO `user_logs` (`user_id`,`content_type`,`content_id`,`created_at`,`updated_at`) VALUES (?, ?, ?, ?, ?)", 1, "rapidash", 1, time.Now(), time.Now()); err != nil {
+	columns := []string{driver.Adapter.Quote("user_id"), driver.Adapter.Quote("content_type"), driver.Adapter.Quote("content_id"), driver.Adapter.Quote("created_at"), driver.Adapter.Quote("updated_at")}
+	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", driver.Adapter.Quote("user_logs"), strings.Join(columns, ","), driver.Adapter.Placeholders(5))
+	if _, err := conn.Exec(query, 1, "rapidash", 1, time.Now(), time.Now()); err != nil {
 		return xerrors.Errorf("failed to insert into user_logs table: %w", err)
 	}
 
@@ -200,6 +208,7 @@ func initCache(conn *sql.DB, typ CacheServerType) error {
 		ServerAddrs(serverAddrs),
 		LogMode(LogModeJSON),
 		LogEnabled(true),
+		DatabaseAdapter(driver.DBType),
 	)
 	if err != nil {
 		return xerrors.Errorf("failed to create rapidash instance: %w", err)

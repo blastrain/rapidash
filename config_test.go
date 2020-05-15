@@ -10,10 +10,10 @@ import (
 func TestConfig(t *testing.T) {
 	cfg, err := NewConfig("testdata/cache.yml")
 	NoError(t, err)
-	cache, err := New(cfg.Options()...)
+	cache, err := New(append([]OptionFunc{DatabaseAdapter(driver.DBType)}, cfg.Options()...)...)
 	NoError(t, err)
 	NoError(t, cache.Flush())
-	conn, err := sql.Open("mysql", "root:@tcp(localhost:3306)/rapidash?parseTime=true")
+	conn, err := sql.Open(driver.Name, driver.Source)
 	NoError(t, err)
 	NoError(t, cache.WarmUp(conn, userLoginType(), false))
 	t.Run("create new records", func(t *testing.T) {

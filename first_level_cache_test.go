@@ -89,14 +89,14 @@ func emptyType() *Struct {
 }
 
 func TestPK(t *testing.T) {
-	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(database.MySQL))
+	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, flc.WarmUp(conn))
 	var event Event
 	NoError(t, flc.FindByPrimaryKey(NewUint64Value(uint64(1)), &event))
 }
 
 func TestINQuery(t *testing.T) {
-	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(database.MySQL))
+	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, flc.WarmUp(conn))
 	t.Run("in query", func(t *testing.T) {
 		builder := NewQueryBuilder("events", driver.Adapter).In("id", []uint64{1, 2, 3, 4, 5})
@@ -117,7 +117,7 @@ func TestINQuery(t *testing.T) {
 }
 
 func TestFindAll(t *testing.T) {
-	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(database.MySQL))
+	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, flc.WarmUp(conn))
 	var events EventSlice
 	NoError(t, flc.FindAll(&events))
@@ -127,7 +127,7 @@ func TestFindAll(t *testing.T) {
 }
 
 func TestComplicatedQuery(t *testing.T) {
-	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(database.MySQL))
+	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, flc.WarmUp(conn))
 	builder := NewQueryBuilder("events", driver.Adapter).
 		Eq("event_id", uint64(1)).
@@ -179,7 +179,7 @@ func TestNEQQuery(t *testing.T) {
 }
 
 func TestGteAndLteQuery(t *testing.T) {
-	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(database.MySQL))
+	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, flc.WarmUp(conn))
 	t.Run("primary key column", func(t *testing.T) {
 		builder := NewQueryBuilder("events", driver.Adapter).
@@ -249,7 +249,7 @@ func TestGteAndLteQuery(t *testing.T) {
 }
 
 func TestGtAndLtQuery(t *testing.T) {
-	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(database.MySQL))
+	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, flc.WarmUp(conn))
 	t.Run("primary key column", func(t *testing.T) {
 		builder := NewQueryBuilder("events", driver.Adapter).
@@ -309,7 +309,7 @@ func TestGtAndLtQuery(t *testing.T) {
 }
 
 func TestOrderQuery(t *testing.T) {
-	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(database.MySQL))
+	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, flc.WarmUp(conn))
 	builder := NewQueryBuilder("events", driver.Adapter).
 		Eq("event_id", uint64(1)).
@@ -331,7 +331,7 @@ func TestOrderQuery(t *testing.T) {
 }
 
 func TestCountQueryFLC(t *testing.T) {
-	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(database.MySQL))
+	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, flc.WarmUp(conn))
 	builder := NewQueryBuilder("events", driver.Adapter).
 		Eq("event_id", uint64(1))
@@ -450,7 +450,7 @@ func TestPtrType(t *testing.T) {
 }
 
 func TestFindByPrimaryKeyCaseDatabaseRecordIsEmpty(t *testing.T) {
-	flc := NewFirstLevelCache(emptyType(), database.NewAdapterWithDBType(database.MySQL))
+	flc := NewFirstLevelCache(emptyType(), database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, flc.WarmUp(conn))
 	var empty Empty
 	NoError(t, flc.FindByPrimaryKey(NewUint64Value(uint64(1)), &empty))
@@ -460,7 +460,7 @@ func TestFindByPrimaryKeyCaseDatabaseRecordIsEmpty(t *testing.T) {
 }
 
 func TestFindByQueryBuilderCaseDatabaseRecordIsEmpty(t *testing.T) {
-	flc := NewFirstLevelCache(emptyType(), database.NewAdapterWithDBType(database.MySQL))
+	flc := NewFirstLevelCache(emptyType(), database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, flc.WarmUp(conn))
 	builder := NewQueryBuilder("empties", driver.Adapter).In("id", []uint64{1})
 	var empties EmptySlice
@@ -471,7 +471,7 @@ func TestFindByQueryBuilderCaseDatabaseRecordIsEmpty(t *testing.T) {
 }
 
 func TestCountByQueryBuilderCaseDatabaseRecordIsEmptyFLC(t *testing.T) {
-	flc := NewFirstLevelCache(emptyType(), database.NewAdapterWithDBType(database.MySQL))
+	flc := NewFirstLevelCache(emptyType(), database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, flc.WarmUp(conn))
 	builder := NewQueryBuilder("empties", driver.Adapter).Eq("id", uint64(1))
 	count, err := flc.CountByQueryBuilder(builder)
@@ -482,7 +482,7 @@ func TestCountByQueryBuilderCaseDatabaseRecordIsEmptyFLC(t *testing.T) {
 }
 
 func TestFindAllCaseDatabaseRecordIsEmpty(t *testing.T) {
-	flc := NewFirstLevelCache(emptyType(), database.NewAdapterWithDBType(database.MySQL))
+	flc := NewFirstLevelCache(emptyType(), database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, flc.WarmUp(conn))
 	var empties EmptySlice
 	NoError(t, flc.FindAll(&empties))
@@ -527,7 +527,7 @@ func BenchmarkPK_MySQL(b *testing.B) {
 }
 
 func BenchmarkPK_Rapidash(b *testing.B) {
-	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(database.MySQL))
+	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(driver.DBType))
 	if err := flc.WarmUp(conn); err != nil {
 		panic(err)
 	}
@@ -591,7 +591,7 @@ func BenchmarkIN_MySQL(b *testing.B) {
 }
 
 func BenchmarkIN_Rapidash(b *testing.B) {
-	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(database.MySQL))
+	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(driver.DBType))
 	if err := flc.WarmUp(conn); err != nil {
 		panic(err)
 	}
