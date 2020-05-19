@@ -401,6 +401,7 @@ func (q *Queries) CacheMissQueriesToSQL(typ *Struct) (string, []interface{}) {
 	query := q.cacheMissQueries[0]
 	conditions := []string{}
 	queryArgs := []interface{}{}
+	idx := 1
 	for _, column := range query.columns {
 		values := columnMap[column]
 		value := values[0]
@@ -421,13 +422,15 @@ func (q *Queries) CacheMissQueriesToSQL(typ *Struct) (string, []interface{}) {
 				} else {
 					queryArgs = append(queryArgs, v.RawValue())
 				}
-				placeholders = append(placeholders, "?")
+				placeholders = append(placeholders, q.adapter.Placeholder(idx))
+				idx++
 			}
 			condition = fmt.Sprintf("%s IN (%s)", q.adapter.Quote(column), strings.Join(placeholders, ","))
 		} else {
 			if !value.IsNil {
 				queryArgs = append(queryArgs, value.RawValue())
-				condition = fmt.Sprintf("%s = ?", q.adapter.Quote(column))
+				condition = fmt.Sprintf("%s = %s", q.adapter.Quote(column), q.adapter.Placeholder(idx))
+				idx++
 			} else {
 				condition = fmt.Sprintf("%s IS NULL", q.adapter.Quote(column))
 			}
