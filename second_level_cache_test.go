@@ -1,10 +1,13 @@
 package rapidash
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -282,12 +285,24 @@ func testSimpleRead(t *testing.T, typ CacheServerType) {
 		Equal(t, v.Name, userLogin.Name)
 
 		NoError(t, tx.Commit())
+
+		f, err := os.Open(filepath.Join("testdata", driver.Name, "alter_user_logins.sql"))
+		NoError(t, err)
+		defer f.Close()
+		queryScanner := bufio.NewScanner(f)
 		t.Run("ADD COLUMN", func(t *testing.T) {
+			{
+				txConn, err := conn.Begin()
+				NoError(t, err)
+				queryScanner.Scan()
+				if _, err := txConn.Exec(queryScanner.Text()); err != nil {
+					NoError(t, txConn.Rollback())
+					t.Fatalf("%+v", err)
+				}
+				NoError(t, txConn.Commit())
+			}
 			txConn, err := conn.Begin()
 			NoError(t, err)
-			if _, err := txConn.Exec("ALTER TABLE user_logins ADD password varchar(10) DEFAULT '100'"); err != nil {
-				t.Fatalf("%+v", err)
-			}
 			NoError(t, cache.WarmUpSecondLevelCache(conn, userLoginType().FieldString("password")))
 			tx, err := cache.Begin(txConn)
 			NoError(t, err)
@@ -305,11 +320,18 @@ func testSimpleRead(t *testing.T, typ CacheServerType) {
 			NoError(t, tx.Commit())
 		})
 		t.Run("MODIFY COLUMN", func(t *testing.T) {
+			{
+				txConn, err := conn.Begin()
+				NoError(t, err)
+				queryScanner.Scan()
+				if _, err := txConn.Exec(queryScanner.Text()); err != nil {
+					NoError(t, txConn.Rollback())
+					t.Fatalf("%+v", err)
+				}
+				NoError(t, txConn.Commit())
+			}
 			txConn, err := conn.Begin()
 			NoError(t, err)
-			if _, err := txConn.Exec("ALTER TABLE user_logins MODIFY COLUMN password int(20) unsigned"); err != nil {
-				t.Fatalf("%+v", err)
-			}
 			NoError(t, cache.WarmUpSecondLevelCache(conn, userLoginType().FieldUint64("password")))
 			tx, err := cache.Begin(txConn)
 			NoError(t, err)
@@ -327,11 +349,18 @@ func testSimpleRead(t *testing.T, typ CacheServerType) {
 			NoError(t, tx.Commit())
 		})
 		t.Run("DROP COLUMN", func(t *testing.T) {
+			{
+				txConn, err := conn.Begin()
+				NoError(t, err)
+				queryScanner.Scan()
+				if _, err := txConn.Exec(queryScanner.Text()); err != nil {
+					NoError(t, txConn.Rollback())
+					t.Fatalf("%+v", err)
+				}
+				NoError(t, txConn.Commit())
+			}
 			txConn, err := conn.Begin()
 			NoError(t, err)
-			if _, err := txConn.Exec("ALTER TABLE user_logins DROP COLUMN password"); err != nil {
-				t.Fatalf("%+v", err)
-			}
 			NoError(t, cache.WarmUpSecondLevelCache(conn, userLoginType()))
 
 			tx, err := cache.Begin(txConn)
