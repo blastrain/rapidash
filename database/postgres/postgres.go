@@ -30,6 +30,10 @@ func (p *Postgres) Quote(s string) string {
 	return fmt.Sprintf(`"%s"`, s)
 }
 
+func (p *Postgres) SupportLastInsertID() bool {
+	return false
+}
+
 func (p *Postgres) TableDDL(conn *sql.DB, table string) (string, error) {
 	cols, err := p.getColumns(conn, table)
 	if err != nil {

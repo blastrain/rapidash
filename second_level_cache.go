@@ -1169,19 +1169,28 @@ func (c *SecondLevelCache) insertSQL(value *StructValue) (string, []interface{})
 	escapedColumns := []string{}
 	placeholders := []string{}
 	values := []interface{}{}
-	for idx, column := range value.typ.Columns() {
-		escapedColumns = append(escapedColumns, c.adapter.Quote(column))
-		placeholders = append(placeholders, c.adapter.Placeholder(idx+1))
-		if value.fields[column] == nil {
-			values = append(values, nil)
-		} else {
+	idx := 1
+	supportLastInsertID := c.adapter.SupportLastInsertID()
+	returningPhrase := ""
+	for _, column := range value.typ.Columns() {
+		if value.fields[column] != nil {
+			escapedColumns = append(escapedColumns, c.adapter.Quote(column))
+			placeholders = append(placeholders, c.adapter.Placeholder(idx))
 			values = append(values, value.fields[column].RawValue())
+			idx++
+		} else if !supportLastInsertID && returningPhrase == "" {
+			for _, primaryKey := range c.primaryKey.Columns {
+				if primaryKey == column {
+					returningPhrase = fmt.Sprintf("RETURNING %s", c.adapter.Quote(column))
+				}
+			}
 		}
 	}
-	return fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
+	return fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s) %s",
 		c.adapter.Quote(c.typ.tableName),
 		strings.Join(escapedColumns, ","),
 		strings.Join(placeholders, ","),
+		returningPhrase,
 	), values
 }
 
@@ -1192,26 +1201,12 @@ func (c *SecondLevelCache) Create(ctx context.Context, tx *Tx, marshaler Marshal
 		return
 	}
 	defer value.Release()
-	sql, values := c.insertSQL(value)
-	result, err := tx.conn.ExecContext(ctx, sql, values...)
+	lastInsertID, err := c.insertIntoDB(ctx, tx, value)
 	if err != nil {
-		e = xerrors.Errorf("failed sql %s %v: %w", sql, values, err)
-		return
-	}
-	lastInsertID, err := result.LastInsertId()
-	if err != nil {
-		e = xerrors.Errorf("failed to get last_insert_id(): %w", err)
+		e = xerrors.Errorf("failed to insert into db: %w", err)
 		return
 	}
 	id = lastInsertID
-	for _, column := range c.primaryKey.Columns {
-		if value.fields[column] == nil {
-			// if value for primary key is not defined,
-			// rapidash assume that result.LastInsertId() can use alternatively.
-			value.fields[column] = c.valueFactory.CreateInt64Value(lastInsertID)
-		}
-	}
-	log.InsertIntoDB(tx.id, sql, values, value)
 	if err := c.deleteKeyByValue(tx, value); err != nil {
 		e = xerrors.Errorf("failed to delete key by value: %w", err)
 		return
@@ -1226,23 +1221,41 @@ func (c *SecondLevelCache) CreateWithoutCache(ctx context.Context, tx *Tx, marsh
 		return
 	}
 	defer value.Release()
+	lastInsertID, err := c.insertIntoDB(ctx, tx, value)
+	if err != nil {
+		e = xerrors.Errorf("failed to insert into db: %w", err)
+		return
+	}
+	return lastInsertID, nil
+}
+
+func (c *SecondLevelCache) insertIntoDB(ctx context.Context, tx *Tx, value *StructValue) (id int64, e error) {
 	sql, values := c.insertSQL(value)
-	result, err := tx.conn.ExecContext(ctx, sql, values...)
-	if err != nil {
-		e = xerrors.Errorf("failed sql %s %v: %w", sql, values, err)
-		return
+	// postgres does not support last_insert_id(). postgres supports RETURNING * instead of this.
+	if c.adapter.SupportLastInsertID() {
+		result, err := tx.conn.ExecContext(ctx, sql, values...)
+		if err != nil {
+			e = xerrors.Errorf("failed sql %s %v: %w", sql, values, err)
+			return
+		}
+		lastInsertID, err := result.LastInsertId()
+		if err != nil {
+			e = xerrors.Errorf("failed to get last_insert_id(): %w", err)
+			return
+		}
+		id = lastInsertID
+	} else {
+		if err := tx.conn.QueryRowContext(ctx, sql, values...).Scan(&id); err != nil {
+			e = xerrors.Errorf("failed to scan value: %w", err)
+			return
+		}
 	}
-	lastInsertID, err := result.LastInsertId()
-	if err != nil {
-		e = xerrors.Errorf("failed to get last_insert_id(): %w", err)
-		return
-	}
-	id = lastInsertID
+
 	for _, column := range c.primaryKey.Columns {
 		if value.fields[column] == nil {
 			// if value for primary key is not defined,
 			// rapidash assume that result.LastInsertId() can use alternatively.
-			value.fields[column] = c.valueFactory.CreateInt64Value(lastInsertID)
+			value.fields[column] = c.valueFactory.CreateInt64Value(id)
 		}
 	}
 	log.InsertIntoDB(tx.id, sql, values, value)

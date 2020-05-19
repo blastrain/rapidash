@@ -190,6 +190,7 @@ func defaultOption() Option {
 
 type Connection interface {
 	QueryContext(context.Context, string, ...interface{}) (*sql.Rows, error)
+	QueryRowContext(context.Context, string, ...interface{}) *sql.Row
 	ExecContext(context.Context, string, ...interface{}) (sql.Result, error)
 }
 

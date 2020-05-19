@@ -40,3 +40,7 @@ func (ms *MySQL) Placeholders(length int) string {
 func (p *MySQL) Quote(s string) string {
 	return fmt.Sprintf("`%s`", s)
 }
+
+func (p *MySQL) SupportLastInsertID() bool {
+	return true
+}

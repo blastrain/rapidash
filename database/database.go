@@ -25,6 +25,7 @@ type Adapter interface {
 	Placeholder(int) string
 	Placeholders(int) string
 	Quote(string) string
+	SupportLastInsertID() bool
 }
 
 func NewDBAdapter() Adapter {
