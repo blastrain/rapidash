@@ -625,8 +625,14 @@ func testQueryBuilder(t *testing.T, typ CacheServerType) {
 			return server.ErrCacheMiss
 		}))
 		query, _ := queries.CacheMissQueriesToSQL(slc.typ)
-		if query != "SELECT `id`,`user_id`,`user_session_id`,`login_param_id`,`name`,`created_at`,`updated_at` FROM `user_logins` WHERE `user_id` IN (?,?,?,?,?) AND `user_session_id` = ?" {
-			t.Fatal("invalid query")
+		if driver.DBType == database.MySQL {
+			if query != "SELECT `id`,`user_id`,`user_session_id`,`login_param_id`,`name`,`created_at`,`updated_at` FROM `user_logins` WHERE `user_id` IN (?,?,?,?,?) AND `user_session_id` = ?" {
+				t.Fatal("invalid query")
+			}
+		} else {
+			if query != `SELECT "id","user_id","user_session_id","login_param_id","name","created_at","updated_at" FROM "user_logins" WHERE "user_id" IN ($1,$2,$3,$4,$5) AND "user_session_id" = $6` {
+				t.Fatal("invalid query")
+			}
 		}
 	})
 
@@ -644,8 +650,15 @@ func testQueryBuilder(t *testing.T, typ CacheServerType) {
 			return server.ErrCacheMiss
 		}))
 		query, _ := queries.CacheMissQueriesToSQL(slc.typ)
-		if query != "SELECT `id`,`user_id`,`user_session_id`,`login_param_id`,`name`,`created_at`,`updated_at` FROM `user_logins` WHERE `user_id` IN (?,?,?,?,?) AND `created_at` IS NULL" {
-			t.Fatal("invalid query")
+
+		if driver.DBType == database.MySQL {
+			if query != "SELECT `id`,`user_id`,`user_session_id`,`login_param_id`,`name`,`created_at`,`updated_at` FROM `user_logins` WHERE `user_id` IN (?,?,?,?,?) AND `created_at` IS NULL" {
+				t.Fatal("invalid query")
+			}
+		} else {
+			if query != `SELECT "id","user_id","user_session_id","login_param_id","name","created_at","updated_at" FROM "user_logins" WHERE "user_id" IN ($1,$2,$3,$4,$5) AND "created_at" IS NULL` {
+				t.Fatal("invalid query")
+			}
 		}
 	})
 }
@@ -2077,28 +2090,14 @@ func TestCountByQueryBuilderCaseDatabaseRecordIsEmptySLC(t *testing.T) {
 }
 
 func TestWarmUp(t *testing.T) {
-	_, err := conn.Exec("DROP TABLE IF EXISTS warm_up_users")
-	NoError(t, err)
+	NoError(t, initTable(conn, "warm_up_users"))
 
-	sql := `
-	CREATE TABLE IF NOT EXISTS warm_up_users (
-	  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-	  user_id bigint(20) unsigned NOT NULL,
-	  nickname varchar(255) NOT NULL,
-	  age int(10) NOT NULL,
-	  created_at datetime NOT NULL,
-	  PRIMARY KEY (id)
-	) ENGINE=InnoDB DEFAULT CHARSET=utf8
-`
 	strc := NewStruct("warm_up_users").
 		FieldUint64("id").
 		FieldUint64("user_id").
 		FieldUint64("nickname").
 		FieldUint64("age").
 		FieldUint64("created_at")
-
-	_, err = conn.Exec(sql)
-	NoError(t, err)
 
 	t.Run("only a single pk", func(t *testing.T) {
 		slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
