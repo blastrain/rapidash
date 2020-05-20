@@ -979,7 +979,7 @@ func (c *EQCondition) Query() string {
 	if c.rawValue == nil {
 		return fmt.Sprintf("%s IS NULL", c.adapter.Quote(c.column))
 	}
-	return fmt.Sprintf("%s = ?", c.adapter.Quote(c.column))
+	return fmt.Sprintf("%s = %s", c.adapter.Quote(c.column), c.adapter.Placeholder(1))
 }
 
 func (c *EQCondition) QueryArgs() []interface{} {
@@ -1023,7 +1023,7 @@ func (c *NEQCondition) Query() string {
 	if c.rawValue == nil {
 		return fmt.Sprintf("%s IS NOT NULL", c.adapter.Quote(c.column))
 	}
-	return fmt.Sprintf("%s != ?", c.adapter.Quote(c.column))
+	return fmt.Sprintf("%s != %s", c.adapter.Quote(c.column), c.adapter.Placeholder(1))
 }
 
 func (c *NEQCondition) QueryArgs() []interface{} {
@@ -1073,7 +1073,7 @@ func (c *GTCondition) Value() *Value {
 }
 
 func (c *GTCondition) Query() string {
-	return fmt.Sprintf("%s > ?", c.adapter.Quote(c.column))
+	return fmt.Sprintf("%s > %s", c.adapter.Quote(c.column), c.adapter.Placeholder(1))
 }
 
 func (c *GTCondition) QueryArgs() []interface{} {
@@ -1119,7 +1119,7 @@ func (c *GTECondition) Value() *Value {
 }
 
 func (c *GTECondition) Query() string {
-	return fmt.Sprintf("%s >= ?", c.adapter.Quote(c.column))
+	return fmt.Sprintf("%s >= %s", c.adapter.Quote(c.column), c.adapter.Placeholder(1))
 }
 
 func (c *GTECondition) QueryArgs() []interface{} {
