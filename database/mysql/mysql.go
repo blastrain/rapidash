@@ -37,10 +37,10 @@ func (ms *MySQL) Placeholders(length int) string {
 	return sb.String()
 }
 
-func (p *MySQL) Quote(s string) string {
+func (ms *MySQL) Quote(s string) string {
 	return fmt.Sprintf("`%s`", s)
 }
 
-func (p *MySQL) SupportLastInsertID() bool {
+func (ms *MySQL) SupportLastInsertID() bool {
 	return true
 }
