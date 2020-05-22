@@ -1166,28 +1166,27 @@ func (c *SecondLevelCache) createByQueryWithValues(tx *Tx, query *Query, values 
 }
 
 func (c *SecondLevelCache) insertSQL(value *StructValue) (string, []interface{}) {
+	qh := c.adapter.QueryHelper()
 	escapedColumns := []string{}
 	placeholders := []string{}
 	values := []interface{}{}
-	idx := 1
-	supportLastInsertID := c.adapter.SupportLastInsertID()
+	supportLastInsertID := qh.SupportLastInsertID()
 	returningPhrase := ""
 	for _, column := range value.typ.Columns() {
 		if value.fields[column] != nil {
-			escapedColumns = append(escapedColumns, c.adapter.Quote(column))
-			placeholders = append(placeholders, c.adapter.Placeholder(idx))
+			escapedColumns = append(escapedColumns, qh.Quote(column))
+			placeholders = append(placeholders, qh.Placeholder())
 			values = append(values, value.fields[column].RawValue())
-			idx++
 		} else if !supportLastInsertID && returningPhrase == "" {
 			for _, primaryKey := range c.primaryKey.Columns {
 				if primaryKey == column {
-					returningPhrase = fmt.Sprintf("RETURNING %s", c.adapter.Quote(column))
+					returningPhrase = fmt.Sprintf("RETURNING %s", qh.Quote(column))
 				}
 			}
 		}
 	}
 	return fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s) %s",
-		c.adapter.Quote(c.typ.tableName),
+		qh.Quote(c.typ.tableName),
 		strings.Join(escapedColumns, ","),
 		strings.Join(placeholders, ","),
 		returningPhrase,

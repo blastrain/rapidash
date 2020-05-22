@@ -939,7 +939,6 @@ func testUpdateByQueryBuilder(t *testing.T, typ CacheServerType) {
 	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{shardKey: &s}, database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, slc.WarmUp(conn))
 
-	fmt.Println("AAAA", slc.opt)
 	t.Run("available cache", func(t *testing.T) {
 		txConn, err := conn.Begin()
 		NoError(t, err)

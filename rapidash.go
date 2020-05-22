@@ -166,7 +166,7 @@ type Option struct {
 
 func defaultOption() Option {
 	return Option{
-		adapter:             database.NewDBAdapter(),
+		adapter:             database.NewAdapter(),
 		serverType:          CacheServerTypeMemcached,
 		timeout:             DefaultTimeout,
 		maxIdleConnections:  DefaultMaxIdleConns,

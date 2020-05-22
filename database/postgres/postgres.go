@@ -14,12 +14,12 @@ func (p *Postgres) Placeholder(idx int) string {
 	return fmt.Sprintf("$%d", idx)
 }
 
-func (p *Postgres) Placeholders(length int) string {
+func (p *Postgres) Placeholders(start, end int) string {
 	sb := &strings.Builder{}
-	sb.Grow((len(p.Placeholder(length)) + 1) * length)
-	for i := 0; i < length; i++ {
-		sb.WriteString(p.Placeholder(i + 1))
-		if i < length-1 {
+	sb.Grow((len(p.Placeholder(end)) + 1) * (end - start + 1))
+	for i := start; i <= end; i++ {
+		sb.WriteString(p.Placeholder(i))
+		if i < end {
 			sb.WriteString(",")
 		}
 	}

@@ -107,7 +107,8 @@ func initEventTable(conn *sql.DB) error {
 		term := "daytime"
 		eventCategoryID := eventID
 		for j := 0; j < 4; j++ {
-			query := fmt.Sprintf("INSERT INTO %s values(%s)", adapter.Quote("events"), adapter.Placeholders(8))
+			qh := adapter.QueryHelper()
+			query := fmt.Sprintf("INSERT INTO %s values(%s)", qh.Quote("events"), qh.Placeholders(8))
 			if _, err := conn.Exec(query, id, eventID, eventCategoryID, term, startWeek, endWeek, time.Now(), time.Now()); err != nil {
 				return xerrors.Errorf("failed to insert into events table: %w", err)
 			}
@@ -127,10 +128,11 @@ func initUserLoginTable(conn *sql.DB) error {
 	userSessionID := 1
 	loginParamID := 1
 	name := "rapidash1"
-	adapter := driver.Adapter
-	columns := []string{adapter.Quote("user_id"), adapter.Quote("user_session_id"), adapter.Quote("login_param_id"), adapter.Quote("name"), adapter.Quote("created_at"), adapter.Quote("updated_at")}
+	qh := driver.Adapter.QueryHelper()
+	columns := []string{qh.Quote("user_id"), qh.Quote("user_session_id"), qh.Quote("login_param_id"), qh.Quote("name"), qh.Quote("created_at"), qh.Quote("updated_at")}
 	for ; userID <= 1000; userID++ {
-		query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", adapter.Quote("user_logins"), strings.Join(columns, ","), adapter.Placeholders(6))
+		qh := driver.Adapter.QueryHelper()
+		query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", qh.Quote("user_logins"), strings.Join(columns, ","), qh.Placeholders(6))
 		if _, err := conn.Exec(query, userID, userSessionID, loginParamID, name, time.Now(), time.Now()); err != nil {
 			return xerrors.Errorf("failed to insert into user_logins table: %w", err)
 		}
@@ -142,7 +144,8 @@ func initPtrTable(conn *sql.DB) error {
 	if err := initTable(conn, "ptr"); err != nil {
 		return xerrors.Errorf("failed to exec ptr: %w", err)
 	}
-	if _, err := conn.Exec(fmt.Sprintf("INSERT INTO %s VALUES (DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT)", driver.Adapter.Quote("ptr"))); err != nil {
+	qh := driver.Adapter.QueryHelper()
+	if _, err := conn.Exec(fmt.Sprintf("INSERT INTO %s VALUES (DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT)", qh.Quote("ptr"))); err != nil {
 		return xerrors.Errorf("failed to insert empty record to ptr table: %w", err)
 	}
 	if _, err := conn.Exec(fmt.Sprintf(`
@@ -167,7 +170,7 @@ INSERT INTO %s
  )
   values
  (%s)
-`, driver.Adapter.Quote("ptr"), driver.Adapter.Placeholders(16)), 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1.23, 4.56, true, "bytes", "string", time.Now()); err != nil {
+`, qh.Quote("ptr"), qh.Placeholders(16)), 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1.23, 4.56, true, "bytes", "string", time.Now()); err != nil {
 		return xerrors.Errorf("failed to insert default value to ptr table: %w", err)
 	}
 	return nil
@@ -177,8 +180,9 @@ func initUserLogTable(conn *sql.DB) error {
 	if err := initTable(conn, "user_logs"); err != nil {
 		return xerrors.Errorf("failed to exec user_logs: %w", err)
 	}
-	columns := []string{driver.Adapter.Quote("user_id"), driver.Adapter.Quote("content_type"), driver.Adapter.Quote("content_id"), driver.Adapter.Quote("created_at"), driver.Adapter.Quote("updated_at")}
-	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", driver.Adapter.Quote("user_logs"), strings.Join(columns, ","), driver.Adapter.Placeholders(5))
+	qh := driver.Adapter.QueryHelper()
+	columns := []string{qh.Quote("user_id"), qh.Quote("content_type"), qh.Quote("content_id"), qh.Quote("created_at"), qh.Quote("updated_at")}
+	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", qh.Quote("user_logs"), strings.Join(columns, ","), qh.Placeholders(5))
 	if _, err := conn.Exec(query, 1, "rapidash", 1, time.Now(), time.Now()); err != nil {
 		return xerrors.Errorf("failed to insert into user_logs table: %w", err)
 	}

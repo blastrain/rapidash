@@ -25,12 +25,12 @@ func (ms *MySQL) Placeholder(_ int) string {
 	return "?"
 }
 
-func (ms *MySQL) Placeholders(length int) string {
+func (ms *MySQL) Placeholders(start, end int) string {
 	sb := &strings.Builder{}
-	sb.Grow((len(ms.Placeholder(0)) + 1) * length)
-	for i := 0; i < length; i++ {
+	sb.Grow((len(ms.Placeholder(0)) + 1) * (end - start + 1))
+	for i := start; i <= end; i++ {
 		sb.WriteString(ms.Placeholder(0))
-		if i < length-1 {
+		if i < end {
 			sb.WriteString(",")
 		}
 	}
