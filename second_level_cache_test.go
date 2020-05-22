@@ -1410,8 +1410,9 @@ func testRawQuery(t *testing.T, typ CacheServerType) {
 
 	defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 	t.Run("raw query", func(t *testing.T) {
+		qh := driver.Adapter.QueryHelper()
 		builder := NewQueryBuilder("user_logins", driver.Adapter).
-			SQL("ORDER BY id DESC LIMIT ? OFFSET ?", 3, 1)
+			SQL(fmt.Sprintf("ORDER BY id DESC LIMIT %s OFFSET %s", qh.Placeholder(), qh.Placeholder()), 3, 1)
 		var userLogins UserLogins
 		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &userLogins))
 		if len(userLogins) != 3 &&
@@ -1452,7 +1453,9 @@ type PtrType struct {
 }
 
 func (p *PtrType) EncodeRapidash(enc Encoder) error {
-	enc.Uint64("id", p.id)
+	if p.id != 0 {
+		enc.Uint64("id", p.id)
+	}
 	enc.IntPtr("intptr", p.intPtr)
 	enc.Int8Ptr("int8ptr", p.int8Ptr)
 	enc.Int16Ptr("int16ptr", p.int16Ptr)
@@ -1780,7 +1783,7 @@ func TestPointerType(t *testing.T) {
 		NoError(t, err)
 
 		for idx, column := range columns {
-			if _, err := txConn.Exec(fmt.Sprintf("ALTER TABLE `ptr` ADD INDEX idx_%d(%s)", idx+1, column)); err != nil {
+			if _, err := txConn.Exec(fmt.Sprintf("ALTER TABLE ptr ADD INDEX idx_%d(%s)", idx+1, column)); err != nil {
 				t.Fatalf("%+v", err)
 			}
 		}
