@@ -1170,20 +1170,17 @@ func (c *SecondLevelCache) insertSQL(value *StructValue) (string, []interface{})
 	escapedColumns := []string{}
 	placeholders := []string{}
 	values := []interface{}{}
-	supportLastInsertID := qh.SupportLastInsertID()
-	returningPhrase := ""
 	for _, column := range value.typ.Columns() {
 		if value.fields[column] != nil {
 			escapedColumns = append(escapedColumns, qh.Quote(column))
 			placeholders = append(placeholders, qh.Placeholder())
 			values = append(values, value.fields[column].RawValue())
-		} else if !supportLastInsertID && returningPhrase == "" {
-			for _, primaryKey := range c.primaryKey.Columns {
-				if primaryKey == column {
-					returningPhrase = fmt.Sprintf("RETURNING %s", qh.Quote(column))
-				}
-			}
 		}
+	}
+
+	var returningPhrase string
+	if !qh.SupportLastInsertID() {
+		returningPhrase = fmt.Sprintf("RETURNING %s", qh.Quote("id"))
 	}
 	return fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s) %s",
 		qh.Quote(c.typ.tableName),
