@@ -1761,6 +1761,7 @@ func TestPointerType(t *testing.T) {
 	})
 
 	t.Run("some queries", func(t *testing.T) {
+
 		columns := []string{
 			"intptr",
 			"int8ptr",
@@ -1779,21 +1780,28 @@ func TestPointerType(t *testing.T) {
 			"stringptr",
 			"timeptr",
 		}
+		{
+			txConn, err := conn.Begin()
+			NoError(t, err)
+
+			alterfmt := map[database.DBType]string{
+				database.MySQL:    "ALTER TABLE ptr ADD INDEX idx_%d(%s)",
+				database.Postgres: "CREATE INDEX idx_%d ON ptr (%s)",
+			}
+			for idx, column := range columns {
+				if _, err := txConn.Exec(fmt.Sprintf(alterfmt[driver.DBType], idx+1, column)); err != nil {
+					t.Fatalf("%+v", err)
+				}
+			}
+			NoError(t, txConn.Commit())
+		}
 		txConn, err := conn.Begin()
 		NoError(t, err)
-
-		for idx, column := range columns {
-			if _, err := txConn.Exec(fmt.Sprintf("ALTER TABLE ptr ADD INDEX idx_%d(%s)", idx+1, column)); err != nil {
-				t.Fatalf("%+v", err)
-			}
-		}
-		fmt.Println("ALTER END")
 		NoError(t, slc.WarmUp(conn))
 		fmt.Println("WARM UP END")
 		tx, err := cache.Begin(txConn)
 		fmt.Println("BEGIN END")
 		NoError(t, err)
-		defer func() { NoError(t, tx.Rollback()) }()
 
 		var ptr PtrType
 		builder := NewQueryBuilder("ptr", driver.Adapter).Eq("id", uint64(2))
@@ -1849,10 +1857,21 @@ func TestPointerType(t *testing.T) {
 				NotEqualf(t, v.id, uint64(0), "cannot find by IN query")
 			}
 		})
-		for idx := range columns {
-			if _, err := txConn.Exec(fmt.Sprintf("ALTER TABLE `ptr` DROP INDEX idx_%d", idx+1)); err != nil {
-				t.Fatalf("%+v", err)
+		NoError(t, tx.Rollback())
+		{
+			txConn, err := conn.Begin()
+			NoError(t, err)
+
+			alterfmt := map[database.DBType]string{
+				database.MySQL:    "ALTER TABLE `ptr` DROP INDEX idx_%d",
+				database.Postgres: "DROP INDEX idx_%d",
 			}
+			for idx := range columns {
+				if _, err := txConn.Exec(fmt.Sprintf(alterfmt[driver.DBType], idx+1)); err != nil {
+					t.Fatalf("%+v", err)
+				}
+			}
+			NoError(t, txConn.Commit())
 		}
 	})
 }
