@@ -2093,6 +2093,10 @@ func TestCountByQueryBuilderCaseDatabaseRecordIsEmptySLC(t *testing.T) {
 
 func TestWarmUp(t *testing.T) {
 	NoError(t, initTable(conn, "warm_up_users"))
+	f, err := os.Open(filepath.Join("testdata", driver.Name, "alter_warm_up_users.sql"))
+	NoError(t, err)
+	defer f.Close()
+	queryScanner := bufio.NewScanner(f)
 
 	strc := NewStruct("warm_up_users").
 		FieldUint64("id").
@@ -2128,7 +2132,8 @@ func TestWarmUp(t *testing.T) {
 	})
 
 	t.Run("pk multiple pair", func(t *testing.T) {
-		_, err := conn.Exec("ALTER TABLE warm_up_users DROP PRIMARY KEY, ADD PRIMARY KEY (id, created_at)")
+		queryScanner.Scan()
+		_, err := conn.Exec(queryScanner.Text())
 		NoError(t, err)
 		slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 		NoError(t, slc.WarmUp(conn))
@@ -2176,7 +2181,8 @@ func TestWarmUp(t *testing.T) {
 	})
 
 	t.Run("index key", func(t *testing.T) {
-		_, err := conn.Exec("ALTER TABLE warm_up_users DROP PRIMARY KEY, ADD PRIMARY KEY (id), ADD INDEX idx_user_id_nickname(user_id, nickname)")
+		queryScanner.Scan()
+		_, err := conn.Exec(queryScanner.Text())
 		NoError(t, err)
 		slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 		NoError(t, slc.WarmUp(conn))
@@ -2206,7 +2212,8 @@ func TestWarmUp(t *testing.T) {
 	})
 
 	t.Run("unique key", func(t *testing.T) {
-		_, err := conn.Exec("ALTER TABLE warm_up_users DROP INDEX idx_user_id_nickname, ADD UNIQUE uq_user_id_nickname(user_id, nickname)")
+		queryScanner.Scan()
+		_, err := conn.Exec(queryScanner.Text())
 		NoError(t, err)
 		slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 		NoError(t, slc.WarmUp(conn))
