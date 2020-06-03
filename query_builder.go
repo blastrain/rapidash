@@ -716,15 +716,20 @@ func (b *QueryBuilder) buildAllQuery() *Queries {
 }
 
 func (b *QueryBuilder) buildRawQuery() (*Queries, error) {
-	prefix := fmt.Sprintf("SELECT * FROM %s ", b.queryHelper.Quote(b.tableName))
-	stmt, err := sqlparser.Parse(prefix + b.sqlCondition.stmt)
-	if err != nil {
-		return nil, xerrors.Errorf("failed to parse %s: %w", prefix+b.sqlCondition.stmt, err)
-	}
-	selectStmt := stmt.(*sqlparser.Select)
-	if selectStmt.GroupBy != nil ||
-		selectStmt.Having != nil ||
-		selectStmt.OrderBy != nil {
+	// vitess-sqlparser supports only mysql type sql syntax.
+	if b.queryHelper.DBType() == database.MySQL {
+		prefix := fmt.Sprintf("SELECT * FROM %s ", b.queryHelper.Quote(b.tableName))
+		stmt, err := sqlparser.Parse(prefix + b.sqlCondition.stmt)
+		if err != nil {
+			return nil, xerrors.Errorf("failed to parse %s: %w", prefix+b.sqlCondition.stmt, err)
+		}
+		selectStmt := stmt.(*sqlparser.Select)
+		if selectStmt.GroupBy != nil ||
+			selectStmt.Having != nil ||
+			selectStmt.OrderBy != nil {
+			b.isIgnoreCache = true
+		}
+	} else {
 		b.isIgnoreCache = true
 	}
 	return &Queries{
