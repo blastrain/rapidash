@@ -33,28 +33,32 @@ type database interface {
 }
 
 type QueryHelper struct {
-	count    int
-	database Database
+	count   int
+	adapter *adapter
+}
+
+func (qh *QueryHelper) DBType() DBType {
+	return qh.adapter.DBType
 }
 
 func (qh *QueryHelper) Placeholder() string {
 	qh.count++
-	return qh.database.Placeholder(qh.count)
+	return qh.adapter.Placeholder(qh.count)
 }
 
 func (qh *QueryHelper) Placeholders(n int) string {
 	start := qh.count + 1
 	end := start + n - 1
 	qh.count += n
-	return qh.database.Placeholders(start, end)
+	return qh.adapter.Placeholders(start, end)
 }
 
 func (qh *QueryHelper) Quote(str string) string {
-	return qh.database.Quote(str)
+	return qh.adapter.Quote(str)
 }
 
 func (qh *QueryHelper) SupportLastInsertID() bool {
-	return qh.database.SupportLastInsertID()
+	return qh.adapter.SupportLastInsertID()
 }
 
 func (qh *QueryHelper) ClearCount() {
@@ -67,37 +71,37 @@ type Adapter interface {
 }
 
 type adapter struct {
+	DBType DBType
 	Database
 }
 
 func (d *adapter) QueryHelper() *QueryHelper {
 	return &QueryHelper{
-		count:    0,
-		database: d.Database,
+		count:   0,
+		adapter: d,
 	}
 }
 
-func NewAdapter() Adapter {
-	return &adapter{
-		Database: NewDatabase(),
-	}
-}
-
-func NewAdapterWithDBType(dbType DBType) Adapter {
-	return &adapter{
-		Database: NewDatabaseWithDBType(dbType),
-	}
-}
-
-func NewDatabase() Database {
+func NewAdapter() *adapter {
 	drivers := sql.Drivers()
 	if len(drivers) == 0 {
 		return nil
 	}
-	return NewDatabaseWithDBType(toDBType(drivers[0]))
+	dbType := toDBType(drivers[0])
+	return &adapter{
+		DBType:   dbType,
+		Database: NewDatabase(dbType),
+	}
 }
 
-func NewDatabaseWithDBType(dbType DBType) Database {
+func NewAdapterWithDBType(dbType DBType) *adapter {
+	return &adapter{
+		DBType:   dbType,
+		Database: NewDatabase(dbType),
+	}
+}
+
+func NewDatabase(dbType DBType) Database {
 	switch dbType {
 	case MySQL:
 		return &mysql.MySQL{}
@@ -116,3 +120,5 @@ func toDBType(pluginName string) DBType {
 	}
 	return None
 }
+
+var _ Adapter = (*adapter)(nil)
