@@ -11,6 +11,7 @@ jobs:
       environment:
         POSTGRES_USER: root
         POSTGRES_DB: rapidash
+        POSTGRES_HOST_AUTH_METHOD: trust
     - image: memcached:1.5
     - image: redis:5.0
     steps:
