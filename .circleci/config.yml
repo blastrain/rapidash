@@ -8,6 +8,9 @@ jobs:
         GO111MODULE: "on"
     - image: circleci/mysql:5.7
     - image: circleci/postgres:12.2
+      environment:
+        POSTGRES_USER: root
+        POSTGRES_DB: rapidash
     - image: memcached:1.5
     - image: redis:5.0
     steps:
