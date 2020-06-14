@@ -6,7 +6,6 @@ jobs:
     - image: circleci/golang:1.12
       environment:
         GO111MODULE: "on"
-        RAPIDASH_DB_DRIVER: mysql
     - image: circleci/mysql:5.7
     - image: memcached:1.5
     - image: redis:5.0
@@ -28,9 +27,13 @@ jobs:
           name: Wait for DB
           command: dockerize -wait tcp://127.0.0.1:3306 -timeout 30s
       - run:
+          name: Run unit tests for postgres
+          command: |
+            RAPIDASH_DB_DRIVER=postgres go test -v ./...
+      - run:
           name: Run unit tests and measure coverage
           command: |
-            go test -v -coverprofile=coverage.out ./...
+            RAPIDASH_DB_DRIVER=mysql go test -v -coverprofile=coverage.out ./...
             bash <(curl -s https://codecov.io/bash) -P ${CIRCLE_PULL_REQUEST##*/}
 workflows:
   version: 2
