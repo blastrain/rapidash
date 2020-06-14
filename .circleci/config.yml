@@ -7,6 +7,7 @@ jobs:
       environment:
         GO111MODULE: "on"
     - image: circleci/mysql:5.7
+    - image: circleci/postgres:12.2
     - image: memcached:1.5
     - image: redis:5.0
     steps:
@@ -25,7 +26,7 @@ jobs:
             golangci-lint run
       - run:
           name: Wait for DB
-          command: dockerize -wait tcp://127.0.0.1:3306 -timeout 30s
+          command: dockerize -wait tcp://127.0.0.1:3306 -wait tcp://127.0.0.1:5432 -timeout 30s
       - run:
           name: Run unit tests for postgres
           command: |
