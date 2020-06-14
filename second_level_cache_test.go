@@ -1,12 +1,17 @@
 package rapidash
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"go.knocknote.io/rapidash/database"
 
 	"go.knocknote.io/rapidash/server"
 	"golang.org/x/xerrors"
@@ -223,7 +228,7 @@ func TestSimpleRead(t *testing.T) {
 func testSimpleRead(t *testing.T, typ CacheServerType) {
 	NoError(t, initCache(conn, typ))
 	userLogin := defaultUserLogin()
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, slc.cacheServer.Flush())
 	NoError(t, slc.WarmUp(conn))
 
@@ -233,7 +238,7 @@ func testSimpleRead(t *testing.T, typ CacheServerType) {
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 		var v UserLogin
 		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 
@@ -249,7 +254,7 @@ func testSimpleRead(t *testing.T, typ CacheServerType) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 		t.Run("from cache server", func(t *testing.T) {
-			builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+			builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 			var v UserLogin
 			NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 
@@ -257,7 +262,7 @@ func testSimpleRead(t *testing.T, typ CacheServerType) {
 			Equal(t, v.Name, userLogin.Name)
 		})
 		t.Run("from stash", func(t *testing.T) {
-			builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+			builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 			var v UserLogin
 			NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 
@@ -272,7 +277,7 @@ func testSimpleRead(t *testing.T, typ CacheServerType) {
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 		var v UserLogin
 		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 
@@ -280,12 +285,24 @@ func testSimpleRead(t *testing.T, typ CacheServerType) {
 		Equal(t, v.Name, userLogin.Name)
 
 		NoError(t, tx.Commit())
+
+		f, err := os.Open(filepath.Join("testdata", driver.Name, "alter_user_logins.sql"))
+		NoError(t, err)
+		defer f.Close()
+		queryScanner := bufio.NewScanner(f)
 		t.Run("ADD COLUMN", func(t *testing.T) {
+			{
+				txConn, err := conn.Begin()
+				NoError(t, err)
+				queryScanner.Scan()
+				if _, err := txConn.Exec(queryScanner.Text()); err != nil {
+					NoError(t, txConn.Rollback())
+					t.Fatalf("%+v", err)
+				}
+				NoError(t, txConn.Commit())
+			}
 			txConn, err := conn.Begin()
 			NoError(t, err)
-			if _, err := txConn.Exec("ALTER TABLE user_logins ADD password varchar(10) DEFAULT '100'"); err != nil {
-				t.Fatalf("%+v", err)
-			}
 			NoError(t, cache.WarmUpSecondLevelCache(conn, userLoginType().FieldString("password")))
 			tx, err := cache.Begin(txConn)
 			NoError(t, err)
@@ -293,7 +310,7 @@ func testSimpleRead(t *testing.T, typ CacheServerType) {
 				NoError(t, tx.RollbackUnlessCommitted())
 			}()
 
-			builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+			builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 			var v UserLoginAfterAddColumn
 			NoError(t, tx.FindByQueryBuilder(builder, &v))
 
@@ -303,11 +320,18 @@ func testSimpleRead(t *testing.T, typ CacheServerType) {
 			NoError(t, tx.Commit())
 		})
 		t.Run("MODIFY COLUMN", func(t *testing.T) {
+			{
+				txConn, err := conn.Begin()
+				NoError(t, err)
+				queryScanner.Scan()
+				if _, err := txConn.Exec(queryScanner.Text()); err != nil {
+					NoError(t, txConn.Rollback())
+					t.Fatalf("%+v", err)
+				}
+				NoError(t, txConn.Commit())
+			}
 			txConn, err := conn.Begin()
 			NoError(t, err)
-			if _, err := txConn.Exec("ALTER TABLE user_logins MODIFY COLUMN password int(20) unsigned"); err != nil {
-				t.Fatalf("%+v", err)
-			}
 			NoError(t, cache.WarmUpSecondLevelCache(conn, userLoginType().FieldUint64("password")))
 			tx, err := cache.Begin(txConn)
 			NoError(t, err)
@@ -315,7 +339,7 @@ func testSimpleRead(t *testing.T, typ CacheServerType) {
 				NoError(t, tx.RollbackUnlessCommitted())
 			}()
 
-			builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+			builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 			var v UserLoginReTyped
 			NoError(t, tx.FindByQueryBuilder(builder, &v))
 
@@ -325,11 +349,18 @@ func testSimpleRead(t *testing.T, typ CacheServerType) {
 			NoError(t, tx.Commit())
 		})
 		t.Run("DROP COLUMN", func(t *testing.T) {
+			{
+				txConn, err := conn.Begin()
+				NoError(t, err)
+				queryScanner.Scan()
+				if _, err := txConn.Exec(queryScanner.Text()); err != nil {
+					NoError(t, txConn.Rollback())
+					t.Fatalf("%+v", err)
+				}
+				NoError(t, txConn.Commit())
+			}
 			txConn, err := conn.Begin()
 			NoError(t, err)
-			if _, err := txConn.Exec("ALTER TABLE user_logins DROP COLUMN password"); err != nil {
-				t.Fatalf("%+v", err)
-			}
 			NoError(t, cache.WarmUpSecondLevelCache(conn, userLoginType()))
 
 			tx, err := cache.Begin(txConn)
@@ -338,7 +369,7 @@ func testSimpleRead(t *testing.T, typ CacheServerType) {
 				NoError(t, tx.RollbackUnlessCommitted())
 			}()
 
-			builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+			builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 			var v UserLogin
 			NoError(t, tx.FindByQueryBuilder(builder, &v))
 
@@ -354,7 +385,7 @@ func testSimpleRead(t *testing.T, typ CacheServerType) {
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(10000))
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(10000))
 		var v UserLogin
 		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 
@@ -369,14 +400,14 @@ func testSimpleRead(t *testing.T, typ CacheServerType) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 		t.Run("from cache server", func(t *testing.T) {
-			builder := NewQueryBuilder("user_logins").Eq("id", uint64(10000))
+			builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(10000))
 			var v UserLogin
 			NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 
 			Equal(t, v.ID, uint64(0))
 		})
 		t.Run("from stash", func(t *testing.T) {
-			builder := NewQueryBuilder("user_logins").Eq("id", uint64(10000))
+			builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(10000))
 			var v UserLogin
 			NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 
@@ -402,7 +433,7 @@ func testSimpleReadWithPessimisticLock(t *testing.T, typ CacheServerType) {
 		pessimisticLock: &pessimisticLock,
 		lockExpiration:  &lockExpiration,
 		expiration:      &expiration,
-	})
+	}, database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, slc.cacheServer.Flush())
 	NoError(t, slc.WarmUp(conn))
 
@@ -410,7 +441,7 @@ func testSimpleReadWithPessimisticLock(t *testing.T, typ CacheServerType) {
 	NoError(t, err)
 	tx, err := cache.Begin(txConn)
 	NoError(t, err)
-	builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+	builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 	var v UserLogin
 	NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 	if v.ID != userLogin.ID {
@@ -422,7 +453,7 @@ func testSimpleReadWithPessimisticLock(t *testing.T, typ CacheServerType) {
 	t.Run("find locked value by another tx", func(t *testing.T) {
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 		var v UserLogin
 		Error(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 	})
@@ -439,7 +470,7 @@ func testSimpleCreate(t *testing.T, typ CacheServerType) {
 	NoError(t, initUserLoginTable(conn))
 	NoError(t, initCache(conn, typ))
 	userLogin := defaultUserLogin()
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, slc.cacheServer.Flush())
 	NoError(t, slc.WarmUp(conn))
 
@@ -459,7 +490,7 @@ func testSimpleCreate(t *testing.T, typ CacheServerType) {
 	if userLogin.ID != 1001 {
 		t.Fatal("cannot assign id")
 	}
-	builder := NewQueryBuilder("user_logins").Eq("user_id", uint64(2))
+	builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("user_id", uint64(2))
 	var foundUserLogin UserLogin
 	NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &foundUserLogin))
 
@@ -478,7 +509,7 @@ func TestSimpleUpdate(t *testing.T) {
 func testSimpleUpdate(t *testing.T, typ CacheServerType) {
 	NoError(t, initUserLoginTable(conn))
 	NoError(t, initCache(conn, typ))
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, slc.WarmUp(conn))
 
 	txConn, err := conn.Begin()
@@ -486,7 +517,7 @@ func testSimpleUpdate(t *testing.T, typ CacheServerType) {
 	tx, err := cache.Begin(txConn)
 	NoError(t, err)
 
-	builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+	builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 	var v UserLogin
 	NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 
@@ -514,7 +545,7 @@ func testSimpleDelete(t *testing.T, typ CacheServerType) {
 	NoError(t, initCache(conn, typ))
 
 	userLogin := defaultUserLogin()
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, slc.WarmUp(conn))
 
 	txConn, err := conn.Begin()
@@ -522,7 +553,7 @@ func testSimpleDelete(t *testing.T, typ CacheServerType) {
 	tx, err := cache.Begin(txConn)
 	NoError(t, err)
 
-	builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+	builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 	var v UserLogin
 	NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 
@@ -544,7 +575,7 @@ func testCreateWithoutCache(t *testing.T, typ CacheServerType) {
 	NoError(t, initCache(conn, typ))
 
 	userLogin := defaultUserLogin()
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, slc.cacheServer.Flush())
 	NoError(t, slc.WarmUp(conn))
 
@@ -564,7 +595,7 @@ func testCreateWithoutCache(t *testing.T, typ CacheServerType) {
 	if userLogin.ID != 1001 {
 		t.Fatal("cannot insert record")
 	}
-	builder := NewQueryBuilder("user_logins").Eq("user_id", uint64(3)).Eq("user_session_id", uint64(2))
+	builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("user_id", uint64(3)).Eq("user_session_id", uint64(2))
 	var foundUserLogin UserLogin
 	NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &foundUserLogin))
 
@@ -583,9 +614,9 @@ func TestQueryBuilder(t *testing.T) {
 func testQueryBuilder(t *testing.T, typ CacheServerType) {
 	t.Run("WHERE IN AND EQ query", func(t *testing.T) {
 		NoError(t, initCache(conn, typ))
-		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 		NoError(t, slc.WarmUp(conn))
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", driver.Adapter).
 			In("user_id", []uint64{1, 2, 3, 4, 5}).
 			Eq("user_session_id", uint64(1))
 		queries, err := builder.BuildWithIndex(slc.valueFactory, slc.indexes, slc.typ)
@@ -594,17 +625,23 @@ func testQueryBuilder(t *testing.T, typ CacheServerType) {
 			return server.ErrCacheMiss
 		}))
 		query, _ := queries.CacheMissQueriesToSQL(slc.typ)
-		if query != "SELECT `id`,`user_id`,`user_session_id`,`login_param_id`,`name`,`created_at`,`updated_at` FROM `user_logins` WHERE `user_id` IN (?,?,?,?,?) AND `user_session_id` = ?" {
-			t.Fatal("invalid query")
+		if driver.DBType == database.MySQL {
+			if query != "SELECT `id`,`user_id`,`user_session_id`,`login_param_id`,`name`,`created_at`,`updated_at` FROM `user_logins` WHERE `user_id` IN (?,?,?,?,?) AND `user_session_id` = ?" {
+				t.Fatal("invalid query")
+			}
+		} else {
+			if query != `SELECT "id","user_id","user_session_id","login_param_id","name","created_at","updated_at" FROM "user_logins" WHERE "user_id" IN ($1,$2,$3,$4,$5) AND "user_session_id" = $6` {
+				t.Fatal("invalid query")
+			}
 		}
 	})
 
 	t.Run("IS NULL query", func(t *testing.T) {
 		NoError(t, initCache(conn, typ))
-		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 		NoError(t, slc.WarmUp(conn))
 
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", driver.Adapter).
 			In("user_id", []uint64{1, 2, 3, 4, 5}).
 			Eq("created_at", nil)
 		queries, err := builder.BuildWithIndex(slc.valueFactory, slc.indexes, slc.typ)
@@ -613,8 +650,15 @@ func testQueryBuilder(t *testing.T, typ CacheServerType) {
 			return server.ErrCacheMiss
 		}))
 		query, _ := queries.CacheMissQueriesToSQL(slc.typ)
-		if query != "SELECT `id`,`user_id`,`user_session_id`,`login_param_id`,`name`,`created_at`,`updated_at` FROM `user_logins` WHERE `user_id` IN (?,?,?,?,?) AND `created_at` IS NULL" {
-			t.Fatal("invalid query")
+
+		if driver.DBType == database.MySQL {
+			if query != "SELECT `id`,`user_id`,`user_session_id`,`login_param_id`,`name`,`created_at`,`updated_at` FROM `user_logins` WHERE `user_id` IN (?,?,?,?,?) AND `created_at` IS NULL" {
+				t.Fatal("invalid query")
+			}
+		} else {
+			if query != `SELECT "id","user_id","user_session_id","login_param_id","name","created_at","updated_at" FROM "user_logins" WHERE "user_id" IN ($1,$2,$3,$4,$5) AND "created_at" IS NULL` {
+				t.Fatal("invalid query")
+			}
 		}
 	})
 }
@@ -630,11 +674,11 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 	t.Run("find by index column query builder", func(t *testing.T) {
 		NoError(t, initUserLoginTable(conn))
 		NoError(t, initCache(conn, typ))
-		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 		NoError(t, slc.cacheServer.Flush())
 		NoError(t, slc.WarmUp(conn))
 
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", driver.Adapter).
 			In("user_id", []uint64{1, 2, 3, 4, 5}).
 			Eq("login_param_id", uint64(1))
 
@@ -665,7 +709,7 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 					t.Fatal("cannot work FindByQueryBuilder")
 				}
 				t.Run("duplicated values", func(t *testing.T) {
-					builder := NewQueryBuilder("user_logins").
+					builder := NewQueryBuilder("user_logins", driver.Adapter).
 						In("user_id", []uint64{1, 2, 3, 4, 5, 1, 2, 3, 4, 5}).
 						Eq("login_param_id", uint64(1))
 					var userLogins UserLogins
@@ -690,11 +734,11 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 	t.Run("cache miss query, find from db", func(t *testing.T) {
 		NoError(t, initUserLoginTable(conn))
 		NoError(t, initCache(conn, typ))
-		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 		NoError(t, slc.cacheServer.Flush())
 		NoError(t, slc.WarmUp(conn))
 
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", driver.Adapter).
 			In("user_id", []uint64{1, 2, 3, 4, 5}).
 			Eq("user_session_id", uint64(1))
 		txConn, err := conn.Begin()
@@ -713,7 +757,7 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 	t.Run("partially found pk and value in cache with uq key", func(t *testing.T) {
 		NoError(t, initUserLoginTable(conn))
 		NoError(t, initCache(conn, typ))
-		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 		NoError(t, slc.WarmUp(conn))
 		{
 			txConn, err := conn.Begin()
@@ -725,7 +769,7 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 			NoError(t, tx.CommitCacheOnly())
 		}
 
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", driver.Adapter).
 			In("user_id", []uint64{1, 2, 3, 4, 5, 6}).
 			Eq("user_session_id", uint64(1))
 		txConn, err := conn.Begin()
@@ -742,7 +786,7 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 	t.Run("partially found pk and value in cache with idx key", func(t *testing.T) {
 		NoError(t, initUserLoginTable(conn))
 		NoError(t, initCache(conn, typ))
-		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 		NoError(t, slc.WarmUp(conn))
 		{
 			txConn, err := conn.Begin()
@@ -785,7 +829,7 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 			NoError(t, tx.Commit())
 		}
 		{
-			builder := NewQueryBuilder("user_logins").
+			builder := NewQueryBuilder("user_logins", driver.Adapter).
 				Eq("user_id", uint64(5)).
 				In("login_param_id", []uint64{1, 2})
 			txConn, err := conn.Begin()
@@ -811,7 +855,7 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 			NoError(t, tx.CommitCacheOnly())
 		}
 
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", driver.Adapter).
 			Eq("user_id", uint64(5)).
 			In("login_param_id", []uint64{1, 2})
 		txConn, err := conn.Begin()
@@ -829,7 +873,7 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 	t.Run("find after updated index column value in same tx", func(t *testing.T) {
 		NoError(t, initUserLoginTable(conn))
 		NoError(t, initCache(conn, typ))
-		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+		slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 		NoError(t, slc.cacheServer.Flush())
 		NoError(t, slc.WarmUp(conn))
 
@@ -840,7 +884,7 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 
 		var userLogin *UserLogin
 		{
-			builder := NewQueryBuilder("user_logins").
+			builder := NewQueryBuilder("user_logins", driver.Adapter).
 				In("user_id", []uint64{1, 2, 3, 4, 5}).
 				Eq("user_session_id", uint64(1))
 			var userLogins UserLogins
@@ -851,14 +895,14 @@ func testFindByQueryBuilder(t *testing.T, typ CacheServerType) {
 			}
 			userLogin = userLogins[0]
 		}
-		updateBuilder := NewQueryBuilder("user_logins").Eq("id", userLogin.ID)
+		updateBuilder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", userLogin.ID)
 		updateMap := map[string]interface{}{
 			"login_param_id": uint64(5),
 		}
 		NoError(t, slc.UpdateByQueryBuilder(context.Background(), tx, updateBuilder, updateMap))
 
 		{
-			builder := NewQueryBuilder("user_logins").
+			builder := NewQueryBuilder("user_logins", driver.Adapter).
 				Eq("user_id", userLogin.UserID).
 				Eq("login_param_id", uint64(5))
 			var userLogins UserLogins
@@ -892,16 +936,15 @@ func testUpdateByQueryBuilder(t *testing.T, typ CacheServerType) {
 	NoError(t, initUserLoginTable(conn))
 	NoError(t, initCache(conn, typ))
 	s := "user_id"
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{shardKey: &s})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{shardKey: &s}, database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, slc.WarmUp(conn))
 
-	fmt.Println("AAAA", slc.opt)
 	t.Run("available cache", func(t *testing.T) {
 		txConn, err := conn.Begin()
 		NoError(t, err)
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", driver.Adapter).
 			In("user_id", []uint64{1, 2, 3, 4, 5}).
 			Eq("user_session_id", uint64(1))
 		name := fmt.Sprintf("rapidash_%d", 2)
@@ -917,7 +960,7 @@ func testUpdateByQueryBuilder(t *testing.T, typ CacheServerType) {
 		NoError(t, tx.Commit())
 	})
 	t.Run("unavailable cache", func(t *testing.T) {
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", driver.Adapter).
 			Gte("user_id", uint64(6)).
 			Lte("user_id", uint64(10))
 		t.Run("update without cache", func(t *testing.T) {
@@ -934,7 +977,7 @@ func testUpdateByQueryBuilder(t *testing.T, typ CacheServerType) {
 			NoError(t, slc.UpdateByQueryBuilder(context.Background(), tx, builder, updateParam))
 
 			var newUserLogins UserLogins
-			findBuilder := NewQueryBuilder("user_logins").In("user_id", []uint64{6, 7, 8, 9, 10})
+			findBuilder := NewQueryBuilder("user_logins", driver.Adapter).In("user_id", []uint64{6, 7, 8, 9, 10})
 			NoError(t, slc.FindByQueryBuilder(context.Background(), tx, findBuilder, &newUserLogins))
 
 			Equal(t, len(newUserLogins), 5)
@@ -959,7 +1002,7 @@ func testUpdateByQueryBuilder(t *testing.T, typ CacheServerType) {
 			NoError(t, slc.UpdateByQueryBuilder(context.Background(), tx, builder, updateParam))
 
 			var newUserLogins UserLogins
-			findBuilder := NewQueryBuilder("user_logins").In("user_id", []uint64{6, 7, 8, 9, 10})
+			findBuilder := NewQueryBuilder("user_logins", driver.Adapter).In("user_id", []uint64{6, 7, 8, 9, 10})
 			NoError(t, slc.FindByQueryBuilder(context.Background(), tx, findBuilder, &newUserLogins))
 			Equal(t, len(newUserLogins), 5)
 			for _, userLogin := range newUserLogins {
@@ -982,11 +1025,11 @@ func TestUpdateUniqueKeyColumn(t *testing.T) {
 func testUpdateUniqueKeyColumn(t *testing.T, typ CacheServerType) {
 	NoError(t, initUserLoginTable(conn))
 	NoError(t, initCache(conn, typ))
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, slc.cacheServer.Flush())
 	NoError(t, slc.WarmUp(conn))
 
-	builder := NewQueryBuilder("user_logins").
+	builder := NewQueryBuilder("user_logins", driver.Adapter).
 		In("user_id", []uint64{1, 2, 3, 4, 5}).
 		Eq("login_param_id", uint64(1))
 	txConn, err := conn.Begin()
@@ -998,7 +1041,7 @@ func testUpdateUniqueKeyColumn(t *testing.T, typ CacheServerType) {
 	}
 	NoError(t, slc.UpdateByQueryBuilder(context.Background(), tx, builder, updateParam))
 	{
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", driver.Adapter).
 			In("user_id", []uint64{1, 2, 3, 4, 5}).
 			Eq("login_param_id", uint64(10))
 		var newUserLogins UserLogins
@@ -1019,10 +1062,10 @@ func TestUpdateKeyColumn(t *testing.T) {
 func testUpdateKeyColumn(t *testing.T, typ CacheServerType) {
 	NoError(t, initUserLoginTable(conn))
 	NoError(t, initCache(conn, typ))
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, slc.cacheServer.Flush())
 	NoError(t, slc.WarmUp(conn))
-	builder := NewQueryBuilder("user_logins").
+	builder := NewQueryBuilder("user_logins", driver.Adapter).
 		In("user_id", []uint64{1, 2, 3, 4, 5}).
 		Eq("user_session_id", uint64(1))
 	txConn, err := conn.Begin()
@@ -1034,7 +1077,7 @@ func testUpdateKeyColumn(t *testing.T, typ CacheServerType) {
 	}
 	NoError(t, slc.UpdateByQueryBuilder(context.Background(), tx, builder, updateParam))
 	{
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", driver.Adapter).
 			In("user_id", []uint64{1, 2, 3, 4, 5}).
 			Eq("user_session_id", uint64(10))
 		var newUserLogins UserLogins
@@ -1049,7 +1092,7 @@ func testUpdateKeyColumn(t *testing.T, typ CacheServerType) {
 func TestUniqueIndexColumnUpdateByPrimaryKey(t *testing.T) {
 	NoError(t, initUserLoginTable(conn))
 	NoError(t, initCache(conn, CacheServerTypeMemcached))
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, slc.cacheServer.Flush())
 	NoError(t, slc.WarmUp(conn))
 
@@ -1060,7 +1103,7 @@ func TestUniqueIndexColumnUpdateByPrimaryKey(t *testing.T) {
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
 
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", driver.Adapter).
 			Eq("user_id", uint64(1)).
 			Eq("user_session_id", uint64(1))
 
@@ -1071,7 +1114,7 @@ func TestUniqueIndexColumnUpdateByPrimaryKey(t *testing.T) {
 			t.Fatal("failed to get value by index key")
 		}
 
-		builder = NewQueryBuilder("user_logins").
+		builder = NewQueryBuilder("user_logins", driver.Adapter).
 			Eq("user_id", uint64(1)).
 			Eq("user_session_id", uint64(2))
 
@@ -1093,7 +1136,7 @@ func TestUniqueIndexColumnUpdateByPrimaryKey(t *testing.T) {
 		updateParam := map[string]interface{}{
 			"user_session_id": uint64(2),
 		}
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 		NoError(t, slc.UpdateByQueryBuilder(context.Background(), tx, builder, updateParam))
 		NoError(t, tx.Commit())
 	}
@@ -1104,7 +1147,7 @@ func TestUniqueIndexColumnUpdateByPrimaryKey(t *testing.T) {
 		NoError(t, err)
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", driver.Adapter).
 			Eq("user_id", uint64(1)).
 			Eq("user_session_id", uint64(1))
 
@@ -1122,7 +1165,7 @@ func TestUniqueIndexColumnUpdateByPrimaryKey(t *testing.T) {
 		NoError(t, err)
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", driver.Adapter).
 			Eq("user_id", uint64(1)).
 			Eq("user_session_id", uint64(2))
 
@@ -1138,7 +1181,7 @@ func TestUniqueIndexColumnUpdateByPrimaryKey(t *testing.T) {
 func TestIndexColumnUpdateByPrimaryKey(t *testing.T) {
 	NoError(t, initUserLoginTable(conn))
 	NoError(t, initCache(conn, CacheServerTypeMemcached))
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, slc.cacheServer.Flush())
 	NoError(t, slc.WarmUp(conn))
 
@@ -1149,7 +1192,7 @@ func TestIndexColumnUpdateByPrimaryKey(t *testing.T) {
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
 
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", driver.Adapter).
 			Eq("user_id", uint64(1)).
 			Eq("login_param_id", uint64(1))
 
@@ -1160,7 +1203,7 @@ func TestIndexColumnUpdateByPrimaryKey(t *testing.T) {
 			t.Fatal("failed to get value by index key")
 		}
 
-		builder = NewQueryBuilder("user_logins").
+		builder = NewQueryBuilder("user_logins", driver.Adapter).
 			Eq("user_id", uint64(1)).
 			Eq("login_param_id", uint64(2))
 
@@ -1182,7 +1225,7 @@ func TestIndexColumnUpdateByPrimaryKey(t *testing.T) {
 		updateParam := map[string]interface{}{
 			"login_param_id": uint64(2),
 		}
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 		NoError(t, slc.UpdateByQueryBuilder(context.Background(), tx, builder, updateParam))
 		NoError(t, tx.Commit())
 	}
@@ -1193,7 +1236,7 @@ func TestIndexColumnUpdateByPrimaryKey(t *testing.T) {
 		NoError(t, err)
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", driver.Adapter).
 			Eq("user_id", uint64(1)).
 			Eq("login_param_id", uint64(1))
 
@@ -1211,7 +1254,7 @@ func TestIndexColumnUpdateByPrimaryKey(t *testing.T) {
 		NoError(t, err)
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", driver.Adapter).
 			Eq("user_id", uint64(1)).
 			Eq("login_param_id", uint64(2))
 
@@ -1227,7 +1270,7 @@ func TestIndexColumnUpdateByPrimaryKey(t *testing.T) {
 func TestLockingRead(t *testing.T) {
 	NoError(t, initUserLoginTable(conn))
 	NoError(t, initCache(conn, CacheServerTypeMemcached))
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, slc.cacheServer.Flush())
 	NoError(t, slc.WarmUp(conn))
 
@@ -1238,7 +1281,7 @@ func TestLockingRead(t *testing.T) {
 
 	// store cache to stash
 	{
-		builder := NewQueryBuilder("user_logins").Eq("user_id", uint64(1))
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("user_id", uint64(1))
 
 		var userLogin UserLogin
 		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &userLogin))
@@ -1259,7 +1302,7 @@ func TestLockingRead(t *testing.T) {
 		updateParam := map[string]interface{}{
 			"login_param_id": uint64(2),
 		}
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 		NoError(t, slc.UpdateByQueryBuilder(context.Background(), tx, builder, updateParam))
 		NoError(t, tx.Commit())
 	}
@@ -1268,7 +1311,7 @@ func TestLockingRead(t *testing.T) {
 	// in this case, cannot get updated value in normal query,
 	// but if use locking read query, could read updated value.
 	{
-		builder := NewQueryBuilder("user_logins").Eq("user_id", uint64(1)).ForUpdate()
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("user_id", uint64(1)).ForUpdate()
 
 		var userLogin UserLogin
 		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &userLogin))
@@ -1291,11 +1334,11 @@ func TestDeleteByQueryBuilder(t *testing.T) {
 
 func testDeleteByQueryBuilder(t *testing.T, typ CacheServerType) {
 	NoError(t, initCache(conn, typ))
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, slc.WarmUp(conn))
 	t.Run("cache is available", func(t *testing.T) {
 		NoError(t, initUserLoginTable(conn))
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", driver.Adapter).
 			In("user_id", []uint64{1, 2, 3, 4, 5}).
 			Eq("user_session_id", uint64(1))
 		txConn, err := conn.Begin()
@@ -1308,7 +1351,7 @@ func testDeleteByQueryBuilder(t *testing.T, typ CacheServerType) {
 
 	t.Run("not available cache", func(t *testing.T) {
 		NoError(t, initUserLoginTable(conn))
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", driver.Adapter).
 			Gte("user_session_id", uint64(1)).
 			Lte("user_session_id", uint64(3))
 		txConn, err := conn.Begin()
@@ -1318,7 +1361,7 @@ func testDeleteByQueryBuilder(t *testing.T, typ CacheServerType) {
 		NoError(t, slc.DeleteByQueryBuilder(context.Background(), tx, builder))
 
 		var userLogins UserLogins
-		findBuilder := NewQueryBuilder("user_logins").
+		findBuilder := NewQueryBuilder("user_logins", driver.Adapter).
 			Eq("user_id", uint64(1)).
 			In("user_session_id", []uint64{1, 2, 3})
 		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, findBuilder, &userLogins))
@@ -1330,7 +1373,7 @@ func testDeleteByQueryBuilder(t *testing.T, typ CacheServerType) {
 
 	t.Run("delete by primary keys", func(t *testing.T) {
 		NoError(t, initUserLoginTable(conn))
-		builder := NewQueryBuilder("user_logins").
+		builder := NewQueryBuilder("user_logins", driver.Adapter).
 			In("id", []uint64{1, 2, 3, 4, 5})
 		txConn, err := conn.Begin()
 		NoError(t, err)
@@ -1357,7 +1400,7 @@ func TestRawQuery(t *testing.T) {
 func testRawQuery(t *testing.T, typ CacheServerType) {
 	NoError(t, initUserLoginTable(conn))
 	NoError(t, initCache(conn, typ))
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, slc.WarmUp(conn))
 
 	txConn, err := conn.Begin()
@@ -1367,8 +1410,9 @@ func testRawQuery(t *testing.T, typ CacheServerType) {
 
 	defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 	t.Run("raw query", func(t *testing.T) {
-		builder := NewQueryBuilder("user_logins").
-			SQL("ORDER BY id DESC LIMIT ? OFFSET ?", 3, 1)
+		qh := driver.Adapter.QueryHelper()
+		builder := NewQueryBuilder("user_logins", driver.Adapter).
+			SQL(fmt.Sprintf("ORDER BY id DESC LIMIT %s OFFSET %s", qh.Placeholder(), qh.Placeholder()), 3, 1)
 		var userLogins UserLogins
 		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &userLogins))
 		if len(userLogins) != 3 &&
@@ -1379,7 +1423,7 @@ func testRawQuery(t *testing.T, typ CacheServerType) {
 		}
 	})
 	t.Run("all query", func(t *testing.T) {
-		builder := NewQueryBuilder("user_logins")
+		builder := NewQueryBuilder("user_logins", driver.Adapter)
 		var userLogins UserLogins
 		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &userLogins))
 		if len(userLogins) != 1000 {
@@ -1409,7 +1453,9 @@ type PtrType struct {
 }
 
 func (p *PtrType) EncodeRapidash(enc Encoder) error {
-	enc.Uint64("id", p.id)
+	if p.id != 0 {
+		enc.Uint64("id", p.id)
+	}
 	enc.IntPtr("intptr", p.intPtr)
 	enc.Int8Ptr("int8ptr", p.int8Ptr)
 	enc.Int16Ptr("int16ptr", p.int16Ptr)
@@ -1575,7 +1621,7 @@ func validateNotNilValue(t *testing.T, v *PtrType) {
 
 func TestPointerType(t *testing.T) {
 	NoError(t, initCache(conn, CacheServerTypeMemcached))
-	slc := NewSecondLevelCache(new(PtrType).Type(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(new(PtrType).Type(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, slc.WarmUp(conn))
 
 	t.Run("invalid value", func(t *testing.T) {
@@ -1585,7 +1631,7 @@ func TestPointerType(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.Rollback()) }()
 
-		builder := NewQueryBuilder("ptr").Eq("id", uint64(1))
+		builder := NewQueryBuilder("ptr", driver.Adapter).Eq("id", uint64(1))
 		var v PtrType
 		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 		if v.id != 1 {
@@ -1600,7 +1646,7 @@ func TestPointerType(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.Rollback()) }()
 
-		builder := NewQueryBuilder("ptr").Eq("id", uint64(2))
+		builder := NewQueryBuilder("ptr", driver.Adapter).Eq("id", uint64(2))
 		var v PtrType
 		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &v))
 		if v.id != 2 {
@@ -1621,7 +1667,7 @@ func TestPointerType(t *testing.T) {
 			t.Fatal("cannot insert invalid value")
 		}
 		var foundValue PtrType
-		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, NewQueryBuilder("ptr").Eq("id", uint64(id)), &foundValue))
+		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, NewQueryBuilder("ptr", driver.Adapter).Eq("id", uint64(id)), &foundValue))
 		// set invalid value to cache server
 		NoError(t, tx.Commit())
 
@@ -1633,7 +1679,7 @@ func TestPointerType(t *testing.T) {
 			defer func() { NoError(t, tx.Rollback()) }()
 
 			var foundValue PtrType
-			NoError(t, slc.FindByQueryBuilder(context.Background(), tx, NewQueryBuilder("ptr").Eq("id", uint64(id)), &foundValue))
+			NoError(t, slc.FindByQueryBuilder(context.Background(), tx, NewQueryBuilder("ptr", driver.Adapter).Eq("id", uint64(id)), &foundValue))
 		})
 	})
 	t.Run("update valid value", func(t *testing.T) {
@@ -1662,12 +1708,12 @@ func TestPointerType(t *testing.T) {
 
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 		var foundValue PtrType
-		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, NewQueryBuilder("ptr").Eq("id", uint64(1)), &foundValue))
+		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, NewQueryBuilder("ptr", driver.Adapter).Eq("id", uint64(1)), &foundValue))
 
 		if foundValue.id == 0 {
 			t.Fatal("cannot find value")
 		}
-		builder := NewQueryBuilder("ptr").Eq("id", foundValue.id)
+		builder := NewQueryBuilder("ptr", driver.Adapter).Eq("id", foundValue.id)
 		t.Run("not pointer value map", func(t *testing.T) {
 			updateMap := map[string]interface{}{
 				"intptr":     intValue,
@@ -1715,6 +1761,7 @@ func TestPointerType(t *testing.T) {
 	})
 
 	t.Run("some queries", func(t *testing.T) {
+
 		columns := []string{
 			"intptr",
 			"int8ptr",
@@ -1733,44 +1780,51 @@ func TestPointerType(t *testing.T) {
 			"stringptr",
 			"timeptr",
 		}
+		{
+			txConn, err := conn.Begin()
+			NoError(t, err)
+
+			alterfmt := map[database.DBType]string{
+				database.MySQL:    "ALTER TABLE ptr ADD INDEX idx_%d(%s)",
+				database.Postgres: "CREATE INDEX idx_%d ON ptr (%s)",
+			}
+			for idx, column := range columns {
+				if _, err := txConn.Exec(fmt.Sprintf(alterfmt[driver.DBType], idx+1, column)); err != nil {
+					t.Fatalf("%+v", err)
+				}
+			}
+			NoError(t, txConn.Commit())
+		}
 		txConn, err := conn.Begin()
 		NoError(t, err)
-
-		for idx, column := range columns {
-			if _, err := txConn.Exec(fmt.Sprintf("ALTER TABLE `ptr` ADD INDEX idx_%d(%s)", idx+1, column)); err != nil {
-				t.Fatalf("%+v", err)
-			}
-		}
-		fmt.Println("ALTER END")
 		NoError(t, slc.WarmUp(conn))
 		fmt.Println("WARM UP END")
 		tx, err := cache.Begin(txConn)
 		fmt.Println("BEGIN END")
 		NoError(t, err)
-		defer func() { NoError(t, tx.Rollback()) }()
 
 		var ptr PtrType
-		builder := NewQueryBuilder("ptr").Eq("id", uint64(2))
+		builder := NewQueryBuilder("ptr", driver.Adapter).Eq("id", uint64(2))
 		NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &ptr))
 		t.Run("pointer value query", func(t *testing.T) {
 			builders := []*QueryBuilder{
-				NewQueryBuilder("ptr").Eq("id", &ptr.id),
-				NewQueryBuilder("ptr").Eq("intptr", ptr.intPtr),
-				NewQueryBuilder("ptr").Eq("int8ptr", ptr.int8Ptr),
-				NewQueryBuilder("ptr").Eq("int16ptr", ptr.int16Ptr),
-				NewQueryBuilder("ptr").Eq("int32ptr", ptr.int32Ptr),
-				NewQueryBuilder("ptr").Eq("int64ptr", ptr.int64Ptr),
-				NewQueryBuilder("ptr").Eq("uintptr", ptr.uintPtr),
-				NewQueryBuilder("ptr").Eq("uint8ptr", ptr.uint8Ptr),
-				NewQueryBuilder("ptr").Eq("uint16ptr", ptr.uint16Ptr),
-				NewQueryBuilder("ptr").Eq("uint32ptr", ptr.uint32Ptr),
-				NewQueryBuilder("ptr").Eq("uint64ptr", ptr.uint64Ptr),
-				NewQueryBuilder("ptr").Eq("float32ptr", ptr.float32Ptr),
-				NewQueryBuilder("ptr").Eq("float64ptr", ptr.float64Ptr),
-				NewQueryBuilder("ptr").Eq("boolptr", ptr.boolPtr),
-				NewQueryBuilder("ptr").Eq("bytesptr", ptr.bytesPtr),
-				NewQueryBuilder("ptr").Eq("stringptr", ptr.stringPtr),
-				NewQueryBuilder("ptr").Eq("timeptr", ptr.timePtr),
+				NewQueryBuilder("ptr", driver.Adapter).Eq("id", &ptr.id),
+				NewQueryBuilder("ptr", driver.Adapter).Eq("intptr", ptr.intPtr),
+				NewQueryBuilder("ptr", driver.Adapter).Eq("int8ptr", ptr.int8Ptr),
+				NewQueryBuilder("ptr", driver.Adapter).Eq("int16ptr", ptr.int16Ptr),
+				NewQueryBuilder("ptr", driver.Adapter).Eq("int32ptr", ptr.int32Ptr),
+				NewQueryBuilder("ptr", driver.Adapter).Eq("int64ptr", ptr.int64Ptr),
+				NewQueryBuilder("ptr", driver.Adapter).Eq("uintptr", ptr.uintPtr),
+				NewQueryBuilder("ptr", driver.Adapter).Eq("uint8ptr", ptr.uint8Ptr),
+				NewQueryBuilder("ptr", driver.Adapter).Eq("uint16ptr", ptr.uint16Ptr),
+				NewQueryBuilder("ptr", driver.Adapter).Eq("uint32ptr", ptr.uint32Ptr),
+				NewQueryBuilder("ptr", driver.Adapter).Eq("uint64ptr", ptr.uint64Ptr),
+				NewQueryBuilder("ptr", driver.Adapter).Eq("float32ptr", ptr.float32Ptr),
+				NewQueryBuilder("ptr", driver.Adapter).Eq("float64ptr", ptr.float64Ptr),
+				NewQueryBuilder("ptr", driver.Adapter).Eq("boolptr", ptr.boolPtr),
+				NewQueryBuilder("ptr", driver.Adapter).Eq("bytesptr", ptr.bytesPtr),
+				NewQueryBuilder("ptr", driver.Adapter).Eq("stringptr", ptr.stringPtr),
+				NewQueryBuilder("ptr", driver.Adapter).Eq("timeptr", ptr.timePtr),
 			}
 			for _, builder := range builders {
 				var v PtrType
@@ -1780,22 +1834,22 @@ func TestPointerType(t *testing.T) {
 		})
 		t.Run("IN condition query", func(t *testing.T) {
 			builders := []*QueryBuilder{
-				NewQueryBuilder("ptr").In("intptr", []int{1}),
-				NewQueryBuilder("ptr").In("int8ptr", []int8{2}),
-				NewQueryBuilder("ptr").In("int16ptr", []int16{3}),
-				NewQueryBuilder("ptr").In("int32ptr", []int32{4}),
-				NewQueryBuilder("ptr").In("int64ptr", []int64{5}),
-				NewQueryBuilder("ptr").In("uintptr", []uint{6}),
-				NewQueryBuilder("ptr").In("uint8ptr", []uint8{7}),
-				NewQueryBuilder("ptr").In("uint16ptr", []uint16{8}),
-				NewQueryBuilder("ptr").In("uint32ptr", []uint32{9}),
-				NewQueryBuilder("ptr").In("uint64ptr", []uint64{10}),
-				NewQueryBuilder("ptr").In("float32ptr", []float32{1.23}),
-				NewQueryBuilder("ptr").In("float64ptr", []float64{4.56}),
-				NewQueryBuilder("ptr").In("boolptr", []bool{true}),
-				NewQueryBuilder("ptr").In("bytesptr", [][]byte{[]byte("bytes")}),
-				NewQueryBuilder("ptr").In("stringptr", []string{"string"}),
-				NewQueryBuilder("ptr").In("timeptr", []time.Time{*ptr.timePtr}),
+				NewQueryBuilder("ptr", driver.Adapter).In("intptr", []int{1}),
+				NewQueryBuilder("ptr", driver.Adapter).In("int8ptr", []int8{2}),
+				NewQueryBuilder("ptr", driver.Adapter).In("int16ptr", []int16{3}),
+				NewQueryBuilder("ptr", driver.Adapter).In("int32ptr", []int32{4}),
+				NewQueryBuilder("ptr", driver.Adapter).In("int64ptr", []int64{5}),
+				NewQueryBuilder("ptr", driver.Adapter).In("uintptr", []uint{6}),
+				NewQueryBuilder("ptr", driver.Adapter).In("uint8ptr", []uint8{7}),
+				NewQueryBuilder("ptr", driver.Adapter).In("uint16ptr", []uint16{8}),
+				NewQueryBuilder("ptr", driver.Adapter).In("uint32ptr", []uint32{9}),
+				NewQueryBuilder("ptr", driver.Adapter).In("uint64ptr", []uint64{10}),
+				NewQueryBuilder("ptr", driver.Adapter).In("float32ptr", []float32{1.23}),
+				NewQueryBuilder("ptr", driver.Adapter).In("float64ptr", []float64{4.56}),
+				NewQueryBuilder("ptr", driver.Adapter).In("boolptr", []bool{true}),
+				NewQueryBuilder("ptr", driver.Adapter).In("bytesptr", [][]byte{[]byte("bytes")}),
+				NewQueryBuilder("ptr", driver.Adapter).In("stringptr", []string{"string"}),
+				NewQueryBuilder("ptr", driver.Adapter).In("timeptr", []time.Time{*ptr.timePtr}),
 			}
 			for _, builder := range builders {
 				var v PtrType
@@ -1803,10 +1857,21 @@ func TestPointerType(t *testing.T) {
 				NotEqualf(t, v.id, uint64(0), "cannot find by IN query")
 			}
 		})
-		for idx := range columns {
-			if _, err := txConn.Exec(fmt.Sprintf("ALTER TABLE `ptr` DROP INDEX idx_%d", idx+1)); err != nil {
-				t.Fatalf("%+v", err)
+		NoError(t, tx.Rollback())
+		{
+			txConn, err := conn.Begin()
+			NoError(t, err)
+
+			alterfmt := map[database.DBType]string{
+				database.MySQL:    "ALTER TABLE `ptr` DROP INDEX idx_%d",
+				database.Postgres: "DROP INDEX idx_%d",
 			}
+			for idx := range columns {
+				if _, err := txConn.Exec(fmt.Sprintf(alterfmt[driver.DBType], idx+1)); err != nil {
+					t.Fatalf("%+v", err)
+				}
+			}
+			NoError(t, txConn.Commit())
 		}
 	})
 }
@@ -1838,11 +1903,11 @@ func BenchmarkSLCIN_SimpleMemcachedAccess(b *testing.B) {
 		panic(err)
 	}
 	setNopLogger()
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 	if err := slc.WarmUp(conn); err != nil {
 		panic(err)
 	}
-	builder := NewQueryBuilder("user_logins").
+	builder := NewQueryBuilder("user_logins", driver.Adapter).
 		In("user_id", []uint64{1, 2, 3, 4, 5}).
 		Eq("user_session_id", uint64(1))
 	tx, err := cache.Begin(conn)
@@ -1884,11 +1949,11 @@ func BenchmarkSLCIN_SimpleRedisAccess(b *testing.B) {
 		panic(err)
 	}
 	setNopLogger()
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 	if err := slc.WarmUp(conn); err != nil {
 		panic(err)
 	}
-	builder := NewQueryBuilder("user_logins").
+	builder := NewQueryBuilder("user_logins", driver.Adapter).
 		In("user_id", []uint64{1, 2, 3, 4, 5}).
 		Eq("user_session_id", uint64(1))
 	tx, err := cache.Begin(conn)
@@ -1986,12 +2051,12 @@ func benchmarkSLCINRapidash(b *testing.B) {
 		panic(err)
 	}
 	setNopLogger()
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 	if err := slc.WarmUp(conn); err != nil {
 		panic(err)
 	}
 	b.ResetTimer()
-	builder := NewQueryBuilder("user_logins").
+	builder := NewQueryBuilder("user_logins", driver.Adapter).
 		In("user_id", []uint64{1, 2, 3, 4, 5}).
 		Eq("user_session_id", uint64(1))
 	userLogins := []*UserLogin{}
@@ -2015,9 +2080,9 @@ func benchmarkSLCINRapidash(b *testing.B) {
 }
 
 func TestCountQuerySLC(t *testing.T) {
-	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, slc.WarmUp(conn))
-	builder := NewQueryBuilder("user_logins").
+	builder := NewQueryBuilder("user_logins", driver.Adapter).
 		Eq("user_id", uint64(1))
 	tx, err := cache.Begin(conn)
 	if err != nil {
@@ -2031,9 +2096,9 @@ func TestCountQuerySLC(t *testing.T) {
 }
 
 func TestCountByQueryBuilderCaseDatabaseRecordIsEmptySLC(t *testing.T) {
-	slc := NewSecondLevelCache(emptyType(), cache.cacheServer, TableOption{})
+	slc := NewSecondLevelCache(emptyType(), cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, slc.WarmUp(conn))
-	builder := NewQueryBuilder("empties").Eq("id", uint64(1))
+	builder := NewQueryBuilder("empties", driver.Adapter).Eq("id", uint64(1))
 	tx, err := cache.Begin(conn)
 	if err != nil {
 		panic(err)
@@ -2046,19 +2111,12 @@ func TestCountByQueryBuilderCaseDatabaseRecordIsEmptySLC(t *testing.T) {
 }
 
 func TestWarmUp(t *testing.T) {
-	_, err := conn.Exec("DROP TABLE IF EXISTS warm_up_users")
+	NoError(t, initTable(conn, "warm_up_users"))
+	f, err := os.Open(filepath.Join("testdata", driver.Name, "alter_warm_up_users.sql"))
 	NoError(t, err)
+	defer f.Close()
+	queryScanner := bufio.NewScanner(f)
 
-	sql := `
-	CREATE TABLE IF NOT EXISTS warm_up_users (
-	  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-	  user_id bigint(20) unsigned NOT NULL,
-	  nickname varchar(255) NOT NULL,
-	  age int(10) NOT NULL,
-	  created_at datetime NOT NULL,
-	  PRIMARY KEY (id)
-	) ENGINE=InnoDB DEFAULT CHARSET=utf8
-`
 	strc := NewStruct("warm_up_users").
 		FieldUint64("id").
 		FieldUint64("user_id").
@@ -2066,11 +2124,8 @@ func TestWarmUp(t *testing.T) {
 		FieldUint64("age").
 		FieldUint64("created_at")
 
-	_, err = conn.Exec(sql)
-	NoError(t, err)
-
 	t.Run("only a single pk", func(t *testing.T) {
-		slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{})
+		slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 		NoError(t, slc.WarmUp(conn))
 
 		Equal(t, len(slc.indexes), 1)
@@ -2082,7 +2137,7 @@ func TestWarmUp(t *testing.T) {
 
 		t.Run("with shard_key", func(t *testing.T) {
 			shardKey := "user_id"
-			slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{shardKey: &shardKey})
+			slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{shardKey: &shardKey}, database.NewAdapterWithDBType(driver.DBType))
 			NoError(t, slc.WarmUp(conn))
 
 			Equal(t, len(slc.indexes), 1)
@@ -2096,9 +2151,10 @@ func TestWarmUp(t *testing.T) {
 	})
 
 	t.Run("pk multiple pair", func(t *testing.T) {
-		_, err := conn.Exec("ALTER TABLE warm_up_users DROP PRIMARY KEY, ADD PRIMARY KEY (id, created_at)")
+		queryScanner.Scan()
+		_, err := conn.Exec(queryScanner.Text())
 		NoError(t, err)
-		slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{})
+		slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 		NoError(t, slc.WarmUp(conn))
 		Equal(t, len(slc.indexes), 2)
 		{
@@ -2119,7 +2175,7 @@ func TestWarmUp(t *testing.T) {
 
 		t.Run("with shard_key", func(t *testing.T) {
 			shardKey := "user_id"
-			slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{shardKey: &shardKey})
+			slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{shardKey: &shardKey}, database.NewAdapterWithDBType(driver.DBType))
 			NoError(t, slc.WarmUp(conn))
 
 			Equal(t, len(slc.indexes), 2)
@@ -2144,9 +2200,10 @@ func TestWarmUp(t *testing.T) {
 	})
 
 	t.Run("index key", func(t *testing.T) {
-		_, err := conn.Exec("ALTER TABLE warm_up_users DROP PRIMARY KEY, ADD PRIMARY KEY (id), ADD INDEX idx_user_id_nickname(user_id, nickname)")
+		queryScanner.Scan()
+		_, err := conn.Exec(queryScanner.Text())
 		NoError(t, err)
-		slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{})
+		slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 		NoError(t, slc.WarmUp(conn))
 		Equal(t, len(slc.indexes), 3)
 		{
@@ -2174,9 +2231,10 @@ func TestWarmUp(t *testing.T) {
 	})
 
 	t.Run("unique key", func(t *testing.T) {
-		_, err := conn.Exec("ALTER TABLE warm_up_users DROP INDEX idx_user_id_nickname, ADD UNIQUE uq_user_id_nickname(user_id, nickname)")
+		queryScanner.Scan()
+		_, err := conn.Exec(queryScanner.Text())
 		NoError(t, err)
-		slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{})
+		slc := NewSecondLevelCache(strc, cache.cacheServer, TableOption{}, database.NewAdapterWithDBType(driver.DBType))
 		NoError(t, slc.WarmUp(conn))
 		Equal(t, len(slc.indexes), 3)
 		{

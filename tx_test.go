@@ -4,16 +4,45 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/lib/pq"
+	"go.knocknote.io/rapidash/database"
 	"golang.org/x/xerrors"
 )
 
 var (
 	conn  *sql.DB
 	cache *Rapidash
+)
+
+var (
+	drivers = map[string]struct {
+		Name, Source string
+		DBType       database.DBType
+		Adapter      database.Adapter
+	}{
+		"mysql": {
+			Name:    "mysql",
+			Source:  "root:@tcp(localhost:3306)/rapidash?parseTime=true",
+			DBType:  database.MySQL,
+			Adapter: database.NewAdapterWithDBType(database.MySQL),
+		},
+		"postgres": {
+			Name:    "postgres",
+			Source:  "host=localhost user=root dbname=rapidash sslmode=disable",
+			DBType:  database.Postgres,
+			Adapter: database.NewAdapterWithDBType(database.Postgres),
+		},
+	}
+	driver = drivers[os.Getenv("RAPIDASH_DB_DRIVER")]
 )
 
 func setUp(conn *sql.DB) error {
@@ -52,38 +81,35 @@ func initDB() error {
 	return nil
 }
 
-func initEventTable(conn *sql.DB) error {
-	if _, err := conn.Exec("DROP TABLE IF EXISTS events"); err != nil {
-		return xerrors.Errorf("failed to drop events table: %w", err)
+func initTable(conn *sql.DB, tableName string) error {
+	sql, err := ioutil.ReadFile(filepath.Join("testdata", driver.Name, tableName+".sql"))
+	if err != nil {
+		return xerrors.Errorf("failed to read sql file: %w", err)
 	}
+	queries := strings.Split(string(sql), ";")
+	for _, query := range queries[:len(queries)-1] {
+		if _, err := conn.Exec(query); err != nil {
+			return xerrors.Errorf("failed to exec query: %w", err)
+		}
+	}
+	return nil
+}
 
-	sql := `
-CREATE TABLE events (
-  id bigint(20) unsigned NOT NULL,
-  event_id bigint(20) unsigned NOT NULL,
-  event_category_id bigint(20) unsigned NOT NULL,
-  term enum('early_morning', 'morning', 'daytime', 'evening', 'night', 'midnight') NOT NULL,
-  start_week int(10) unsigned NOT NULL,
-  end_week int(10) unsigned NOT NULL,
-  created_at datetime NOT NULL,
-  updated_at datetime NOT NULL,
-  PRIMARY KEY (id),
-  UNIQUE KEY (event_id, start_week),
-  KEY (term, start_week, end_week)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-`
-
-	if _, err := conn.Exec(sql); err != nil {
-		return xerrors.Errorf("failed to create events table: %w", err)
+func initEventTable(conn *sql.DB) error {
+	if err := initTable(conn, "events"); err != nil {
+		return xerrors.Errorf("failed to init events: %w", err)
 	}
 	id := 1
+	adapter := driver.Adapter
 	for eventID := 1; eventID <= 1000; eventID++ {
 		startWeek := 1
 		endWeek := 12
 		term := "daytime"
 		eventCategoryID := eventID
 		for j := 0; j < 4; j++ {
-			if _, err := conn.Exec("insert into events values(?, ?, ?, ?, ?, ?, ?, ?)", id, eventID, eventCategoryID, term, startWeek, endWeek, time.Now(), time.Now()); err != nil {
+			qh := adapter.QueryHelper()
+			query := fmt.Sprintf("INSERT INTO %s values(%s)", qh.Quote("events"), qh.Placeholders(8))
+			if _, err := conn.Exec(query, id, eventID, eventCategoryID, term, startWeek, endWeek, time.Now(), time.Now()); err != nil {
 				return xerrors.Errorf("failed to insert into events table: %w", err)
 			}
 			id++
@@ -91,40 +117,23 @@ CREATE TABLE events (
 			endWeek += 12
 		}
 	}
-
 	return nil
 }
 
 func initUserLoginTable(conn *sql.DB) error {
-	if _, err := conn.Exec("DROP TABLE IF EXISTS user_logins"); err != nil {
-		return xerrors.Errorf("failed to drop user_logins table: %w", err)
+	if err := initTable(conn, "user_logins"); err != nil {
+		return xerrors.Errorf("failed to exec user_logins: %w", err)
 	}
-	sql := `
-CREATE TABLE IF NOT EXISTS user_logins (
-  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-  user_id bigint(20) unsigned NOT NULL,
-  user_session_id bigint(20) unsigned NOT NULL,
-  login_param_id bigint(20) unsigned NOT NULL,
-  name varchar(255) NOT NULL,
-  created_at datetime NOT NULL,
-  updated_at datetime NOT NULL,
-  PRIMARY KEY (id),
-  UNIQUE KEY (user_id, user_session_id),
-  KEY (user_id, login_param_id),
-  KEY (user_id, created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8
-`
-	if _, err := conn.Exec(sql); err != nil {
-		return xerrors.Errorf("failed to create user_logins table: %w", err)
-	}
-
 	userID := 1
 	userSessionID := 1
 	loginParamID := 1
 	name := "rapidash1"
+	qh := driver.Adapter.QueryHelper()
+	columns := []string{qh.Quote("user_id"), qh.Quote("user_session_id"), qh.Quote("login_param_id"), qh.Quote("name"), qh.Quote("created_at"), qh.Quote("updated_at")}
 	for ; userID <= 1000; userID++ {
-		if _, err := conn.Exec("INSERT INTO `user_logins` (`user_id`,`user_session_id`,`login_param_id`,`name`,`created_at`,`updated_at`) VALUES (?, ?, ?, ?, ?, ?)",
-			userID, userSessionID, loginParamID, name, time.Now(), time.Now()); err != nil {
+		qh := driver.Adapter.QueryHelper()
+		query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", qh.Quote("user_logins"), strings.Join(columns, ","), qh.Placeholders(6))
+		if _, err := conn.Exec(query, userID, userSessionID, loginParamID, name, time.Now(), time.Now()); err != nil {
 			return xerrors.Errorf("failed to insert into user_logins table: %w", err)
 		}
 	}
@@ -132,39 +141,15 @@ CREATE TABLE IF NOT EXISTS user_logins (
 }
 
 func initPtrTable(conn *sql.DB) error {
-	if _, err := conn.Exec("DROP TABLE IF EXISTS ptr"); err != nil {
-		return xerrors.Errorf("failed to drop ptr table: %w", err)
+	if err := initTable(conn, "ptr"); err != nil {
+		return xerrors.Errorf("failed to exec ptr: %w", err)
 	}
-	sql := `
-CREATE TABLE IF NOT EXISTS ptr (
-  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-  intptr int,
-  int8ptr int,
-  int16ptr int,
-  int32ptr int,
-  int64ptr int,
-  uintptr int unsigned,
-  uint8ptr int unsigned,
-  uint16ptr int unsigned,
-  uint32ptr int unsigned,
-  uint64ptr bigint unsigned,
-  float32ptr float,
-  float64ptr double,
-  boolptr tinyint,
-  bytesptr varchar(255),
-  stringptr varchar(255),
-  timeptr datetime,
-  PRIMARY KEY (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8
-`
-	if _, err := conn.Exec(sql); err != nil {
-		return xerrors.Errorf("failed to create ptr table: %w", err)
-	}
-	if _, err := conn.Exec("INSERT INTO `ptr` () values ()"); err != nil {
+	qh := driver.Adapter.QueryHelper()
+	if _, err := conn.Exec(fmt.Sprintf("INSERT INTO %s VALUES (DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT,DEFAULT)", qh.Quote("ptr"))); err != nil {
 		return xerrors.Errorf("failed to insert empty record to ptr table: %w", err)
 	}
-	if _, err := conn.Exec(`
-INSERT INTO ptr
+	if _, err := conn.Exec(fmt.Sprintf(`
+INSERT INTO %s
  (
   intptr,
   int8ptr,
@@ -184,35 +169,21 @@ INSERT INTO ptr
   timeptr
  )
   values
- (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-`, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1.23, 4.56, true, "bytes", "string"); err != nil {
+ (%s)
+`, qh.Quote("ptr"), qh.Placeholders(16)), 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1.23, 4.56, true, "bytes", "string", time.Now()); err != nil {
 		return xerrors.Errorf("failed to insert default value to ptr table: %w", err)
 	}
 	return nil
 }
 
 func initUserLogTable(conn *sql.DB) error {
-	if _, err := conn.Exec("DROP TABLE IF EXISTS user_logs"); err != nil {
-		return xerrors.Errorf("failed to drop user_logs table: %w", err)
+	if err := initTable(conn, "user_logs"); err != nil {
+		return xerrors.Errorf("failed to exec user_logs: %w", err)
 	}
-	sql := `
-CREATE TABLE IF NOT EXISTS user_logs (
-  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-  user_id bigint(20) unsigned NOT NULL,
-  content_type varchar(255) NOT NULL,
-  content_id bigint(20) unsigned NOT NULL,
-  created_at datetime NOT NULL,
-  updated_at datetime NOT NULL,
-  PRIMARY KEY (id),
-  KEY (user_id, created_at),
-  KEY (user_id, content_type, content_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8
-`
-	if _, err := conn.Exec(sql); err != nil {
-		return xerrors.Errorf("failed to create user_logs table: %w", err)
-	}
-
-	if _, err := conn.Exec("INSERT INTO `user_logs` (`user_id`,`content_type`,`content_id`,`created_at`,`updated_at`) VALUES (?, ?, ?, ?, ?)", 1, "rapidash", 1, time.Now(), time.Now()); err != nil {
+	qh := driver.Adapter.QueryHelper()
+	columns := []string{qh.Quote("user_id"), qh.Quote("content_type"), qh.Quote("content_id"), qh.Quote("created_at"), qh.Quote("updated_at")}
+	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", qh.Quote("user_logs"), strings.Join(columns, ","), qh.Placeholders(5))
+	if _, err := conn.Exec(query, 1, "rapidash", 1, time.Now(), time.Now()); err != nil {
 		return xerrors.Errorf("failed to insert into user_logs table: %w", err)
 	}
 
@@ -220,21 +191,9 @@ CREATE TABLE IF NOT EXISTS user_logs (
 }
 
 func initEmptyTable(conn *sql.DB) error {
-	if _, err := conn.Exec("DROP TABLE IF EXISTS empties"); err != nil {
-		return xerrors.Errorf("failed to drop empties table: %w", err)
+	if err := initTable(conn, "empties"); err != nil {
+		return xerrors.Errorf("failed to exec empties: %w", err)
 	}
-
-	sql := `
-CREATE TABLE empties (
-  id bigint(20) unsigned NOT NULL,
-  PRIMARY KEY (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-`
-
-	if _, err := conn.Exec(sql); err != nil {
-		return xerrors.Errorf("failed to create empties table: %w", err)
-	}
-
 	return nil
 }
 
@@ -253,6 +212,7 @@ func initCache(conn *sql.DB, typ CacheServerType) error {
 		ServerAddrs(serverAddrs),
 		LogMode(LogModeJSON),
 		LogEnabled(true),
+		DatabaseAdapter(driver.DBType),
 	)
 	if err != nil {
 		return xerrors.Errorf("failed to create rapidash instance: %w", err)
@@ -299,7 +259,7 @@ func initCache(conn *sql.DB, typ CacheServerType) error {
 
 func TestMain(m *testing.M) {
 	var err error
-	conn, err = sql.Open("mysql", "root:@tcp(localhost:3306)/rapidash?parseTime=true")
+	conn, err = sql.Open(driver.Name, driver.Source)
 	if err != nil {
 		panic(err)
 	}
@@ -308,7 +268,6 @@ func TestMain(m *testing.M) {
 	}
 
 	result := m.Run()
-
 	os.Exit(result)
 
 }
@@ -389,11 +348,11 @@ func TestTx_CreateByTableContext(t *testing.T) {
 		NoError(t, err)
 		NotEqualf(t, id, 0, "last insert id is zero")
 		var findUserFromSLCByPrimaryKey UserLogin
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(0))
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(0))
 		NoError(t, tx.FindByQueryBuilder(builder, &findUserFromSLCByPrimaryKey))
 		Equal(t, findUserFromSLCByPrimaryKey.ID, userLogin.ID)
 		var findUserFromSLCByUniqueKey UserLogin
-		builder = NewQueryBuilder("user_logins").Eq("user_id", uint64(0)).Eq("user_session_id", uint64(1000))
+		builder = NewQueryBuilder("user_logins", driver.Adapter).Eq("user_id", uint64(0)).Eq("user_session_id", uint64(1000))
 		NoError(t, tx.FindByQueryBuilder(builder, &findUserFromSLCByUniqueKey))
 		Equal(t, findUserFromSLCByPrimaryKey.ID, userLogin.ID)
 		NoError(t, tx.Commit())
@@ -417,7 +376,7 @@ func TestTx_FindByQueryBuilderContext(t *testing.T) {
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 		NoError(t, tx.Commit())
 
-		builder := NewQueryBuilder("events")
+		builder := NewQueryBuilder("events", driver.Adapter)
 		var events EventSlice
 		if err := tx.FindByQueryBuilderContext(context.Background(), builder, &events); err != nil {
 			if !xerrors.Is(err, ErrAlreadyCommittedTransaction) {
@@ -432,7 +391,7 @@ func TestTx_FindByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("events")
+		builder := NewQueryBuilder("events", driver.Adapter)
 		var events EventSlice
 		NoError(t, tx.FindByQueryBuilderContext(context.Background(), builder, &events))
 		NoError(t, tx.Commit())
@@ -442,7 +401,7 @@ func TestTx_FindByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 		var userLogin UserLogin
 		NoError(t, tx.FindByQueryBuilderContext(context.Background(), builder, &userLogin))
 		NoError(t, tx.Commit())
@@ -452,7 +411,7 @@ func TestTx_FindByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("user_logins")
+		builder := NewQueryBuilder("user_logins", driver.Adapter)
 		var userLogins UserLogins
 		if err := tx.FindByQueryBuilderContext(context.Background(), builder, &userLogins); err != nil {
 			if !xerrors.Is(err, ErrConnectionOfTransaction) {
@@ -467,7 +426,7 @@ func TestTx_FindByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("users")
+		builder := NewQueryBuilder("users", driver.Adapter)
 		var userLogins UserLogins
 		if err := tx.FindByQueryBuilderContext(context.Background(), builder, &userLogins); err == nil {
 			t.Fatal("err is nil\n")
@@ -477,7 +436,7 @@ func TestTx_FindByQueryBuilderContext(t *testing.T) {
 		tx, err := cache.Begin(conn)
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
-		builder := NewQueryBuilder("user_logs").Eq("id", uint64(1)).Gte("content_id", uint64(1)).Lte("content_id", uint64(1))
+		builder := NewQueryBuilder("user_logs", driver.Adapter).Eq("id", uint64(1)).Gte("content_id", uint64(1)).Lte("content_id", uint64(1))
 		var userLogs UserLogs
 		NoError(t, tx.FindByQueryBuilderContext(context.Background(), builder, &userLogs))
 		NoError(t, tx.Commit())
@@ -495,7 +454,7 @@ func TestTx_CountByQueryBuilder(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("events")
+		builder := NewQueryBuilder("events", driver.Adapter)
 		count, err := tx.CountByQueryBuilder(builder)
 		NoError(t, err)
 		NotEqualf(t, count, 0, "failed count")
@@ -506,7 +465,7 @@ func TestTx_CountByQueryBuilder(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("user_logins")
+		builder := NewQueryBuilder("user_logins", driver.Adapter)
 		count, err := tx.CountByQueryBuilder(builder)
 		NoError(t, err)
 		NotEqualf(t, count, 0, "failed count")
@@ -517,7 +476,7 @@ func TestTx_CountByQueryBuilder(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("unknown")
+		builder := NewQueryBuilder("unknown", driver.Adapter)
 		if _, err := tx.CountByQueryBuilder(builder); err == nil {
 			t.Fatal("err is nil")
 		}
@@ -530,7 +489,7 @@ func TestTx_FindAllByTable(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("events")
+		builder := NewQueryBuilder("events", driver.Adapter)
 		count, err := tx.CountByQueryBuilder(builder)
 		NoError(t, err)
 		var events EventSlice
@@ -538,7 +497,7 @@ func TestTx_FindAllByTable(t *testing.T) {
 
 		Equalf(t, len(events), int(count), "invalid events length")
 
-		builder = NewQueryBuilder("user_logins")
+		builder = NewQueryBuilder("user_logins", driver.Adapter)
 		count, err = tx.CountByQueryBuilder(builder)
 		NoError(t, err)
 		var userLogins UserLogins
@@ -565,14 +524,14 @@ func TestTx_UpdateByQueryBuilder(t *testing.T) {
 	NoError(t, err)
 	defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-	findBuilder := NewQueryBuilder("user_logins").
+	findBuilder := NewQueryBuilder("user_logins", driver.Adapter).
 		Eq("user_id", uint64(1)).
 		Eq("user_session_id", uint64(1))
 	var userLogin UserLogin
 	NoError(t, tx.FindByQueryBuilder(findBuilder, &userLogin))
 	NotEqualf(t, userLogin.ID, 0, "cannot find userLogin")
 
-	builder := NewQueryBuilder("user_logins").Eq("id", userLogin.ID)
+	builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", userLogin.ID)
 	NoError(t, tx.UpdateByQueryBuilder(builder, map[string]interface{}{
 		"login_param_id": uint64(10),
 	}))
@@ -588,7 +547,7 @@ func TestTx_UpdateByQueryBuilderContext(t *testing.T) {
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 		NoError(t, tx.Commit())
 
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 		if err := tx.UpdateByQueryBuilderContext(context.Background(), builder, map[string]interface{}{
 			"login_param_id": uint64(10),
 		}); err != nil {
@@ -606,7 +565,7 @@ func TestTx_UpdateByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("events").Eq("id", uint64(1))
+		builder := NewQueryBuilder("events", driver.Adapter).Eq("id", uint64(1))
 		var event Event
 		NoError(t, tx.FindByQueryBuilder(builder, &event))
 		NotEqualf(t, event.ID, 0, "cannot find event")
@@ -622,7 +581,7 @@ func TestTx_UpdateByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 		if err := tx.UpdateByQueryBuilderContext(context.Background(), builder, map[string]interface{}{
 			"login_param_id": uint64(10),
 		}); err != nil {
@@ -640,14 +599,14 @@ func TestTx_UpdateByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		findBuilder := NewQueryBuilder("user_logins").
+		findBuilder := NewQueryBuilder("user_logins", driver.Adapter).
 			Eq("user_id", uint64(1)).
 			Eq("user_session_id", uint64(1))
 		var userLogin UserLogin
 		NoError(t, tx.FindByQueryBuilder(findBuilder, &userLogin))
 		NotEqualf(t, userLogin.ID, 0, "cannot find userLogin")
 
-		builder := NewQueryBuilder("user_logins").Eq("id", userLogin.ID)
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", userLogin.ID)
 		NoError(t, tx.UpdateByQueryBuilderContext(context.Background(), builder, map[string]interface{}{
 			"login_param_id": uint64(10),
 		}))
@@ -660,7 +619,7 @@ func TestTx_UpdateByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("rapidash").Eq("id", uint64(1))
+		builder := NewQueryBuilder("rapidash", driver.Adapter).Eq("id", uint64(1))
 		if err := tx.UpdateByQueryBuilderContext(context.Background(), builder, map[string]interface{}{
 			"start_week": uint8(10),
 		}); err == nil {
@@ -676,14 +635,14 @@ func TestTx_DeleteByQueryBuilder(t *testing.T) {
 	NoError(t, err)
 	defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-	findBuilder := NewQueryBuilder("user_logins").
+	findBuilder := NewQueryBuilder("user_logins", driver.Adapter).
 		Eq("user_id", uint64(1)).
 		Eq("user_session_id", uint64(1))
 	var userLogin UserLogin
 	NoError(t, tx.FindByQueryBuilder(findBuilder, &userLogin))
 	NotEqualf(t, userLogin.ID, 0, "cannot find userLogin")
 
-	builder := NewQueryBuilder("user_logins").Eq("id", userLogin.ID)
+	builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", userLogin.ID)
 	NoError(t, tx.DeleteByQueryBuilder(builder))
 	NoError(t, tx.Commit())
 }
@@ -697,7 +656,7 @@ func TestTx_DeleteByQueryBuilderContext(t *testing.T) {
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 		NoError(t, tx.Commit())
 
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 		if err := tx.DeleteByQueryBuilderContext(context.Background(), builder); err != nil {
 			if !xerrors.Is(err, ErrAlreadyCommittedTransaction) {
 				t.Fatalf("unexpected type err: %+v", err)
@@ -713,7 +672,7 @@ func TestTx_DeleteByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("events").Eq("id", uint64(1))
+		builder := NewQueryBuilder("events", driver.Adapter).Eq("id", uint64(1))
 		var event Event
 		NoError(t, tx.FindByQueryBuilder(builder, &event))
 		NotEqualf(t, event.ID, 0, "cannot find event")
@@ -727,7 +686,7 @@ func TestTx_DeleteByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 		if err := tx.DeleteByQueryBuilderContext(context.Background(), builder); err != nil {
 			if !xerrors.Is(err, ErrConnectionOfTransaction) {
 				t.Fatalf("unexpected type err: %+v", err)
@@ -743,14 +702,14 @@ func TestTx_DeleteByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		findBuilder := NewQueryBuilder("user_logins").
+		findBuilder := NewQueryBuilder("user_logins", driver.Adapter).
 			Eq("user_id", uint64(1)).
 			Eq("user_session_id", uint64(1))
 		var userLogin UserLogin
 		NoError(t, tx.FindByQueryBuilder(findBuilder, &userLogin))
 		NotEqualf(t, userLogin.ID, 0, "cannot find userLogin")
 
-		builder := NewQueryBuilder("user_logins").Eq("id", userLogin.ID)
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", userLogin.ID)
 		NoError(t, tx.DeleteByQueryBuilderContext(context.Background(), builder))
 		NoError(t, tx.Commit())
 	})
@@ -761,7 +720,7 @@ func TestTx_DeleteByQueryBuilderContext(t *testing.T) {
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
 
-		builder := NewQueryBuilder("rapidash").Eq("id", uint64(1))
+		builder := NewQueryBuilder("rapidash", driver.Adapter).Eq("id", uint64(1))
 		if err := tx.DeleteByQueryBuilderContext(context.Background(), builder); err == nil {
 			t.Fatalf("err is nil")
 		}

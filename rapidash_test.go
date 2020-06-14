@@ -11,7 +11,7 @@ import (
 
 func TestServerChanging(t *testing.T) {
 	t.Run("remove and add server", func(t *testing.T) {
-		cache, err := New(ServerAddrs([]string{"localhost:11211"}), MaxIdleConnections(1000), Timeout(200*time.Millisecond), LastLevelCachePessimisticLock(true))
+		cache, err := New(ServerAddrs([]string{"localhost:11211"}), MaxIdleConnections(1000), Timeout(200*time.Millisecond), LastLevelCachePessimisticLock(true), DatabaseAdapter(driver.DBType))
 		NoError(t, err)
 		tx, err := cache.Begin()
 		NoErrorf(t, err, "cannot begin cache transaction")
@@ -24,14 +24,14 @@ func TestServerChanging(t *testing.T) {
 	})
 
 	t.Run("remove and add only slc server", func(t *testing.T) {
-		cache, err := New(ServerAddrs([]string{"localhost:11211"}), MaxIdleConnections(1000), Timeout(200*time.Millisecond), LastLevelCachePessimisticLock(true))
+		cache, err := New(ServerAddrs([]string{"localhost:11211"}), MaxIdleConnections(1000), Timeout(200*time.Millisecond), LastLevelCachePessimisticLock(true), DatabaseAdapter(driver.DBType))
 		NoError(t, err)
 		NoError(t, cache.WarmUp(conn, userLoginType(), false))
 		tx, err := cache.Begin(conn)
 		NoErrorf(t, err, "cannot begin cache transaction")
 		NoErrorf(t, cache.RemoveSecondLevelCacheServers("localhost:11211"), "cannot remove server")
 
-		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 		var v UserLogin
 		Errorf(t, tx.FindByQueryBuilder(builder, &v), "find slc cache")
 		NoErrorf(t, tx.Create("int", Int(1)), "cannot create cache")
@@ -43,7 +43,7 @@ func TestServerChanging(t *testing.T) {
 	})
 
 	t.Run("remove and add only llc server", func(t *testing.T) {
-		cache, err := New(ServerAddrs([]string{"localhost:11211"}), MaxIdleConnections(1000), Timeout(200000000000), LastLevelCachePessimisticLock(true))
+		cache, err := New(ServerAddrs([]string{"localhost:11211"}), MaxIdleConnections(1000), Timeout(200000000000), LastLevelCachePessimisticLock(true), DatabaseAdapter(driver.DBType))
 		NoError(t, err)
 		tx, err := cache.Begin()
 		NoErrorf(t, err, "cannot begin cache transaction")
@@ -59,7 +59,7 @@ func TestServerChanging(t *testing.T) {
 func TestRecover(t *testing.T) {
 	txConn, err := conn.Begin()
 	NoError(t, err)
-	builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+	builder := NewQueryBuilder("user_logins", driver.Adapter).Eq("id", uint64(1))
 	var v UserLogin
 	{
 		tx, err := cache.Begin(txConn)

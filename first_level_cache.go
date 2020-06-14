@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/knocknote/vitess-sqlparser/sqlparser"
+	"go.knocknote.io/rapidash/database"
 	"golang.org/x/xerrors"
 )
 
@@ -37,13 +38,15 @@ type FirstLevelCache struct {
 	findAllValue *StructSliceValue
 	primaryKey   string
 	valueFactory *ValueFactory
+	adapter      database.Adapter
 }
 
-func NewFirstLevelCache(s *Struct) *FirstLevelCache {
+func NewFirstLevelCache(s *Struct, adapter database.Adapter) *FirstLevelCache {
 	return &FirstLevelCache{
 		typ:          s,
 		indexTrees:   map[string]*BTree{},
 		valueFactory: NewValueFactory(),
+		adapter:      adapter,
 	}
 }
 
@@ -87,12 +90,9 @@ func (c *FirstLevelCache) WarmUp(conn *sql.DB) (e error) {
 }
 
 func (c *FirstLevelCache) showCreateTable(conn *sql.DB) (string, error) {
-	var (
-		tbl string
-		ddl string
-	)
-	if err := conn.QueryRow(fmt.Sprintf("SHOW CREATE TABLE `%s`", c.typ.tableName)).Scan(&tbl, &ddl); err != nil {
-		return "", xerrors.Errorf("failed to execute 'SHOW CREATE TABLE `%s`': %w", c.typ.tableName, err)
+	ddl, err := c.adapter.TableDDL(conn, c.typ.tableName)
+	if err != nil {
+		return "", xerrors.Errorf("failed to get ddl for %s: %w", c.typ.tableName)
 	}
 	return ddl, nil
 }
@@ -101,7 +101,7 @@ func (c *FirstLevelCache) loadAll(conn *sql.DB) (*sql.Rows, error) {
 	columns := c.typ.Columns()
 	escapedColumns := make([]string, len(columns))
 	for idx, column := range columns {
-		escapedColumns[idx] = fmt.Sprintf("`%s`", column)
+		escapedColumns[idx] = c.adapter.Quote(column)
 	}
 	query := fmt.Sprintf("SELECT %s FROM %s", strings.Join(escapedColumns, ","), c.typ.tableName)
 	rows, err := conn.Query(query)

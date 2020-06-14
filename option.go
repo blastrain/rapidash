@@ -2,6 +2,8 @@ package rapidash
 
 import (
 	"time"
+
+	"go.knocknote.io/rapidash/database"
 )
 
 type OptionFunc func(*Rapidash)
@@ -197,6 +199,12 @@ func LastLevelCacheTagLockExpiration(tag string, expiration time.Duration) Optio
 		opt := r.opt.llcOpt.tagOpt[tag]
 		opt.lockExpiration = expiration
 		r.opt.llcOpt.tagOpt[tag] = opt
+	}
+}
+
+func DatabaseAdapter(dbType database.DBType) OptionFunc {
+	return func(r *Rapidash) {
+		r.opt.adapter = database.NewAdapterWithDBType(dbType)
 	}
 }
 

@@ -9,8 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/knocknote/vitess-sqlparser/sqlparser"
 	"github.com/knocknote/msgpack"
+	"github.com/knocknote/vitess-sqlparser/sqlparser"
+	"go.knocknote.io/rapidash/database"
 	"go.knocknote.io/rapidash/server"
 	"golang.org/x/xerrors"
 )
@@ -45,6 +46,7 @@ type SecondLevelCache struct {
 	valueDecoderPool      sync.Pool
 	primaryKeyDecoderPool sync.Pool
 	valueFactory          *ValueFactory
+	adapter               database.Adapter
 }
 
 type TxValue struct {
@@ -91,7 +93,7 @@ func (v *TxValue) EncodeLog() string {
 	return v.String()
 }
 
-func NewSecondLevelCache(s *Struct, server server.CacheServer, opt TableOption) *SecondLevelCache {
+func NewSecondLevelCache(s *Struct, server server.CacheServer, opt TableOption, adapter database.Adapter) *SecondLevelCache {
 	valueFactory := NewValueFactory()
 	return &SecondLevelCache{
 		typ:          s,
@@ -110,6 +112,7 @@ func NewSecondLevelCache(s *Struct, server server.CacheServer, opt TableOption) 
 			},
 		},
 		valueFactory: valueFactory,
+		adapter:      adapter,
 	}
 }
 
@@ -152,12 +155,9 @@ func (c *SecondLevelCache) WarmUp(conn *sql.DB) error {
 }
 
 func (c *SecondLevelCache) showCreateTable(conn *sql.DB) (string, error) {
-	var (
-		tbl string
-		ddl string
-	)
-	if err := conn.QueryRow(fmt.Sprintf("SHOW CREATE TABLE `%s`", c.typ.tableName)).Scan(&tbl, &ddl); err != nil {
-		return "", xerrors.Errorf("failed to execute 'SHOW CREATE TABLE `%s`': %w", c.typ.tableName, err)
+	ddl, err := c.adapter.TableDDL(conn, c.typ.tableName)
+	if err != nil {
+		return "", xerrors.Errorf("failed to get ddl for %s: %w", c.typ.tableName)
 	}
 	return ddl, nil
 }
@@ -176,7 +176,7 @@ func (c *SecondLevelCache) setupPrimaryKey(constraint *sqlparser.Constraint) {
 	}
 	primaryKey := strings.Join(columns, ":")
 	for idx := range columns {
-		subColumns := columns[:idx+1:idx+1]
+		subColumns := columns[: idx+1 : idx+1]
 		if len(subColumns) == 0 {
 			continue
 		}
@@ -1166,22 +1166,27 @@ func (c *SecondLevelCache) createByQueryWithValues(tx *Tx, query *Query, values 
 }
 
 func (c *SecondLevelCache) insertSQL(value *StructValue) (string, []interface{}) {
+	qh := c.adapter.QueryHelper()
 	escapedColumns := []string{}
 	placeholders := []string{}
 	values := []interface{}{}
 	for _, column := range value.typ.Columns() {
-		escapedColumns = append(escapedColumns, fmt.Sprintf("`%s`", column))
-		placeholders = append(placeholders, "?")
-		if value.fields[column] == nil {
-			values = append(values, nil)
-		} else {
+		if value.fields[column] != nil {
+			escapedColumns = append(escapedColumns, qh.Quote(column))
+			placeholders = append(placeholders, qh.Placeholder())
 			values = append(values, value.fields[column].RawValue())
 		}
 	}
-	return fmt.Sprintf("INSERT INTO `%s` (%s) VALUES (%s)",
-		c.typ.tableName,
+
+	var returningPhrase string
+	if !qh.SupportLastInsertID() {
+		returningPhrase = fmt.Sprintf("RETURNING %s", qh.Quote("id"))
+	}
+	return fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s) %s",
+		qh.Quote(c.typ.tableName),
 		strings.Join(escapedColumns, ","),
 		strings.Join(placeholders, ","),
+		returningPhrase,
 	), values
 }
 
@@ -1192,26 +1197,12 @@ func (c *SecondLevelCache) Create(ctx context.Context, tx *Tx, marshaler Marshal
 		return
 	}
 	defer value.Release()
-	sql, values := c.insertSQL(value)
-	result, err := tx.conn.ExecContext(ctx, sql, values...)
+	lastInsertID, err := c.insertIntoDB(ctx, tx, value)
 	if err != nil {
-		e = xerrors.Errorf("failed sql %s %v: %w", sql, values, err)
-		return
-	}
-	lastInsertID, err := result.LastInsertId()
-	if err != nil {
-		e = xerrors.Errorf("failed to get last_insert_id(): %w", err)
+		e = xerrors.Errorf("failed to insert into db: %w", err)
 		return
 	}
 	id = lastInsertID
-	for _, column := range c.primaryKey.Columns {
-		if value.fields[column] == nil {
-			// if value for primary key is not defined,
-			// rapidash assume that result.LastInsertId() can use alternatively.
-			value.fields[column] = c.valueFactory.CreateInt64Value(lastInsertID)
-		}
-	}
-	log.InsertIntoDB(tx.id, sql, values, value)
 	if err := c.deleteKeyByValue(tx, value); err != nil {
 		e = xerrors.Errorf("failed to delete key by value: %w", err)
 		return
@@ -1226,23 +1217,41 @@ func (c *SecondLevelCache) CreateWithoutCache(ctx context.Context, tx *Tx, marsh
 		return
 	}
 	defer value.Release()
+	lastInsertID, err := c.insertIntoDB(ctx, tx, value)
+	if err != nil {
+		e = xerrors.Errorf("failed to insert into db: %w", err)
+		return
+	}
+	return lastInsertID, nil
+}
+
+func (c *SecondLevelCache) insertIntoDB(ctx context.Context, tx *Tx, value *StructValue) (id int64, e error) {
 	sql, values := c.insertSQL(value)
-	result, err := tx.conn.ExecContext(ctx, sql, values...)
-	if err != nil {
-		e = xerrors.Errorf("failed sql %s %v: %w", sql, values, err)
-		return
+	// postgres does not support last_insert_id(). postgres supports RETURNING * instead of this.
+	if c.adapter.SupportLastInsertID() {
+		result, err := tx.conn.ExecContext(ctx, sql, values...)
+		if err != nil {
+			e = xerrors.Errorf("failed sql %s %v: %w", sql, values, err)
+			return
+		}
+		lastInsertID, err := result.LastInsertId()
+		if err != nil {
+			e = xerrors.Errorf("failed to get last_insert_id(): %w", err)
+			return
+		}
+		id = lastInsertID
+	} else {
+		if err := tx.conn.QueryRowContext(ctx, sql, values...).Scan(&id); err != nil {
+			e = xerrors.Errorf("failed to scan value: %w", err)
+			return
+		}
 	}
-	lastInsertID, err := result.LastInsertId()
-	if err != nil {
-		e = xerrors.Errorf("failed to get last_insert_id(): %w", err)
-		return
-	}
-	id = lastInsertID
+
 	for _, column := range c.primaryKey.Columns {
 		if value.fields[column] == nil {
 			// if value for primary key is not defined,
 			// rapidash assume that result.LastInsertId() can use alternatively.
-			value.fields[column] = c.valueFactory.CreateInt64Value(lastInsertID)
+			value.fields[column] = c.valueFactory.CreateInt64Value(id)
 		}
 	}
 	log.InsertIntoDB(tx.id, sql, values, value)
@@ -1364,7 +1373,7 @@ func (c *SecondLevelCache) DeleteByQueryBuilder(ctx context.Context, tx *Tx, bui
 }
 
 func (c *SecondLevelCache) builderByValue(value *StructValue, index *Index) *QueryBuilder {
-	builder := NewQueryBuilder(c.typ.tableName)
+	builder := NewQueryBuilder(c.typ.tableName, c.adapter)
 	for _, column := range index.Columns {
 		if value.fields[column] == nil {
 			return nil
@@ -1377,13 +1386,13 @@ func (c *SecondLevelCache) builderByValue(value *StructValue, index *Index) *Que
 func (c *SecondLevelCache) updateBuilderByValue(value *StructValue, index *Index, updateMap map[string]interface{}) *QueryBuilder {
 	switch index.Type {
 	case IndexTypePrimaryKey:
-		builder := NewQueryBuilder(c.typ.tableName)
+		builder := NewQueryBuilder(c.typ.tableName, c.adapter)
 		for _, column := range index.Columns {
 			builder.Eq(column, value.fields[column].RawValue())
 		}
 		return builder
 	case IndexTypeKey, IndexTypeUniqueKey:
-		builder := NewQueryBuilder(c.typ.tableName)
+		builder := NewQueryBuilder(c.typ.tableName, c.adapter)
 		for _, column := range index.Columns {
 			if _, exists := updateMap[column]; !exists {
 				return nil

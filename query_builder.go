@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/knocknote/vitess-sqlparser/sqlparser"
+	"go.knocknote.io/rapidash/database"
 	"go.knocknote.io/rapidash/server"
 	"golang.org/x/xerrors"
 )
@@ -246,6 +247,7 @@ func NewValueIterator(keys []server.CacheKey) *ValueIterator {
 
 type Queries struct {
 	tableName        string
+	queryHelper      *database.QueryHelper
 	primaryIndex     *Index
 	queries          []*Query
 	cacheMissQueries []*Query
@@ -255,9 +257,10 @@ type Queries struct {
 	isAllSQL         bool
 }
 
-func NewQueries(tableName string, primaryIndex *Index, queryNum int) *Queries {
+func NewQueries(tableName string, primaryIndex *Index, queryNum int, queryHelper *database.QueryHelper) *Queries {
 	return &Queries{
 		tableName:        tableName,
+		queryHelper:      queryHelper,
 		primaryIndex:     primaryIndex,
 		queries:          make([]*Query, 0, queryNum),
 		cacheMissQueries: []*Query{},
@@ -370,20 +373,21 @@ func (q *Queries) FindCacheMissQueryByStructValue(value *StructValue) *Query {
 }
 
 func (q *Queries) CacheMissQueriesToSQL(typ *Struct) (string, []interface{}) {
+	q.queryHelper.ClearCount()
 	escapedColumns := []string{}
 	for _, column := range typ.Columns() {
-		escapedColumns = append(escapedColumns, fmt.Sprintf("`%s`", column))
+		escapedColumns = append(escapedColumns, q.queryHelper.Quote(column))
 	}
 	if q.rawSQL != "" {
-		return fmt.Sprintf("SELECT %s FROM `%s` %s",
+		return fmt.Sprintf("SELECT %s FROM %s %s",
 			strings.Join(escapedColumns, ","),
-			q.tableName,
+			q.queryHelper.Quote(q.tableName),
 			q.rawSQL,
 		), q.rawSQLValues
 	} else if q.isAllSQL {
-		return fmt.Sprintf("SELECT %s FROM `%s`",
+		return fmt.Sprintf("SELECT %s FROM %s",
 			strings.Join(escapedColumns, ","),
-			q.tableName,
+			q.queryHelper.Quote(q.tableName),
 		), nil
 	}
 	if len(q.cacheMissQueries) == 0 {
@@ -418,15 +422,15 @@ func (q *Queries) CacheMissQueriesToSQL(typ *Struct) (string, []interface{}) {
 				} else {
 					queryArgs = append(queryArgs, v.RawValue())
 				}
-				placeholders = append(placeholders, "?")
+				placeholders = append(placeholders, q.queryHelper.Placeholder())
 			}
-			condition = fmt.Sprintf("`%s` IN (%s)", column, strings.Join(placeholders, ","))
+			condition = fmt.Sprintf("%s IN (%s)", q.queryHelper.Quote(column), strings.Join(placeholders, ","))
 		} else {
 			if !value.IsNil {
 				queryArgs = append(queryArgs, value.RawValue())
-				condition = fmt.Sprintf("`%s` = ?", column)
+				condition = fmt.Sprintf("%s = %s", q.queryHelper.Quote(column), q.queryHelper.Placeholder())
 			} else {
-				condition = fmt.Sprintf("`%s` IS NULL", column)
+				condition = fmt.Sprintf("%s IS NULL", q.queryHelper.Quote(column))
 			}
 
 		}
@@ -436,9 +440,9 @@ func (q *Queries) CacheMissQueriesToSQL(typ *Struct) (string, []interface{}) {
 	if lockOpt != "" {
 		lockOpt = " " + lockOpt
 	}
-	return fmt.Sprintf("SELECT %s FROM `%s` WHERE %s%s",
+	return fmt.Sprintf("SELECT %s FROM %s WHERE %s%s",
 		strings.Join(escapedColumns, ","),
-		q.tableName,
+		q.queryHelper.Quote(q.tableName),
 		strings.Join(conditions, " AND "),
 		lockOpt,
 	), queryArgs
@@ -529,6 +533,7 @@ func (b *QueryBuilder) AvailableIndex() bool {
 }
 
 type QueryBuilder struct {
+	queryHelper     *database.QueryHelper
 	tableName       string
 	conditions      *Conditions
 	inCondition     *INCondition
@@ -540,13 +545,14 @@ type QueryBuilder struct {
 	cachedQueries   *Queries
 }
 
-func NewQueryBuilder(tableName string) *QueryBuilder {
+func NewQueryBuilder(tableName string, adapter database.Adapter) *QueryBuilder {
 	return &QueryBuilder{
 		tableName: tableName,
 		conditions: &Conditions{
 			conditions: []Condition{},
 		},
 		orderConditions: []*OrderCondition{},
+		queryHelper:     adapter.QueryHelper(),
 	}
 }
 
@@ -601,6 +607,7 @@ func (b *QueryBuilder) indexes() []string {
 }
 
 func (b *QueryBuilder) SelectSQL(typ *Struct) (string, []interface{}) {
+	b.queryHelper.ClearCount()
 	where := []string{}
 	args := []interface{}{}
 	for _, condition := range b.conditions.conditions {
@@ -609,45 +616,47 @@ func (b *QueryBuilder) SelectSQL(typ *Struct) (string, []interface{}) {
 	}
 	escapedColumns := []string{}
 	for _, column := range typ.Columns() {
-		escapedColumns = append(escapedColumns, fmt.Sprintf("`%s`", column))
+		escapedColumns = append(escapedColumns, b.queryHelper.Quote(column))
 	}
 	lockOpt := b.lockOpt.String()
 	if lockOpt != "" {
 		lockOpt = " " + lockOpt
 	}
-	return fmt.Sprintf("SELECT %s FROM `%s` WHERE %s%s",
+	return fmt.Sprintf("SELECT %s FROM %s WHERE %s%s",
 		strings.Join(escapedColumns, ","),
-		b.tableName,
+		b.queryHelper.Quote(b.tableName),
 		strings.Join(where, " AND "),
 		lockOpt,
 	), args
 }
 
 func (b *QueryBuilder) UpdateSQL(updateMap map[string]interface{}) (string, []interface{}) {
-	where := []string{}
-	args := []interface{}{}
-	for _, condition := range b.conditions.conditions {
-		where = append(where, condition.Query())
-		args = append(args, condition.QueryArgs()...)
-	}
+	b.queryHelper.ClearCount()
 	setList := []string{}
 	values := []interface{}{}
 	for k, v := range updateMap {
-		setList = append(setList, fmt.Sprintf("`%s` = ?", k))
+		setList = append(setList, fmt.Sprintf("%s = %s", b.queryHelper.Quote(k), b.queryHelper.Placeholder()))
 		values = append(values, v)
 	}
-	values = append(values, args...)
-	return fmt.Sprintf("UPDATE `%s` SET %s WHERE %s", b.tableName, strings.Join(setList, ","), strings.Join(where, " AND ")), values
-}
-
-func (b *QueryBuilder) DeleteSQL() (string, []interface{}) {
 	where := []string{}
 	args := []interface{}{}
 	for _, condition := range b.conditions.conditions {
 		where = append(where, condition.Query())
 		args = append(args, condition.QueryArgs()...)
 	}
-	return fmt.Sprintf("DELETE FROM `%s` WHERE %s", b.tableName, strings.Join(where, " AND ")), args
+	values = append(values, args...)
+	return fmt.Sprintf("UPDATE %s SET %s WHERE %s", b.queryHelper.Quote(b.tableName), strings.Join(setList, ","), strings.Join(where, " AND ")), values
+}
+
+func (b *QueryBuilder) DeleteSQL() (string, []interface{}) {
+	b.queryHelper.ClearCount()
+	where := []string{}
+	args := []interface{}{}
+	for _, condition := range b.conditions.conditions {
+		where = append(where, condition.Query())
+		args = append(args, condition.QueryArgs()...)
+	}
+	return fmt.Sprintf("DELETE FROM %s WHERE %s", b.queryHelper.Quote(b.tableName), strings.Join(where, " AND ")), args
 }
 
 func (b *QueryBuilder) Release() {
@@ -661,7 +670,7 @@ func (b *QueryBuilder) Build(factory *ValueFactory) {
 func (b *QueryBuilder) buildINQueryWithIndex(indexes map[string]*Index) (*Queries, error) {
 	queryNum := len(b.inCondition.values)
 	columnNum := len(b.conditions.conditions)
-	queries := NewQueries(b.tableName, b.primaryIndexFromIndexes(indexes), queryNum)
+	queries := NewQueries(b.tableName, b.primaryIndexFromIndexes(indexes), queryNum, b.queryHelper)
 	for i := 0; i < queryNum; i++ {
 		queries.Add(NewQuery(columnNum))
 	}
@@ -699,26 +708,33 @@ func (b *QueryBuilder) buildINQueryWithIndex(indexes map[string]*Index) (*Querie
 func (b *QueryBuilder) buildAllQuery() *Queries {
 	b.isIgnoreCache = true
 	return &Queries{
-		tableName: b.tableName,
-		isAllSQL:  true,
-		queries:   make([]*Query, 1),
+		tableName:   b.tableName,
+		queryHelper: b.queryHelper,
+		isAllSQL:    true,
+		queries:     make([]*Query, 1),
 	}
 }
 
 func (b *QueryBuilder) buildRawQuery() (*Queries, error) {
-	prefix := fmt.Sprintf("SELECT * FROM `%s` ", b.tableName)
-	stmt, err := sqlparser.Parse(prefix + b.sqlCondition.stmt)
-	if err != nil {
-		return nil, xerrors.Errorf("failed to parse %s: %w", prefix+b.sqlCondition.stmt, err)
-	}
-	selectStmt := stmt.(*sqlparser.Select)
-	if selectStmt.GroupBy != nil ||
-		selectStmt.Having != nil ||
-		selectStmt.OrderBy != nil {
+	// vitess-sqlparser supports only mysql type sql syntax.
+	if b.queryHelper.DBType() == database.MySQL {
+		prefix := fmt.Sprintf("SELECT * FROM %s ", b.queryHelper.Quote(b.tableName))
+		stmt, err := sqlparser.Parse(prefix + b.sqlCondition.stmt)
+		if err != nil {
+			return nil, xerrors.Errorf("failed to parse %s: %w", prefix+b.sqlCondition.stmt, err)
+		}
+		selectStmt := stmt.(*sqlparser.Select)
+		if selectStmt.GroupBy != nil ||
+			selectStmt.Having != nil ||
+			selectStmt.OrderBy != nil {
+			b.isIgnoreCache = true
+		}
+	} else {
 		b.isIgnoreCache = true
 	}
 	return &Queries{
 		tableName:    b.tableName,
+		queryHelper:  b.queryHelper,
 		rawSQL:       b.sqlCondition.stmt,
 		rawSQLValues: b.sqlCondition.rawValues,
 		queries:      make([]*Query, 1),
@@ -784,7 +800,7 @@ func (b *QueryBuilder) BuildWithIndex(factory *ValueFactory, indexes map[string]
 		return queries, nil
 	}
 	columnNum := len(b.conditions.conditions)
-	queries := NewQueries(b.tableName, b.primaryIndexFromIndexes(indexes), 1)
+	queries := NewQueries(b.tableName, b.primaryIndexFromIndexes(indexes), 1, b.queryHelper)
 	queries.lockOpt = b.lockOpt
 	query := NewQuery(columnNum)
 	for _, condition := range b.conditions.conditions {
@@ -812,32 +828,32 @@ func (b *QueryBuilder) Query() string {
 }
 
 func (b *QueryBuilder) Eq(column string, value interface{}) *QueryBuilder {
-	b.conditions.Append(&EQCondition{column: column, rawValue: value})
+	b.conditions.Append(&EQCondition{column: column, rawValue: value, queryHelper: b.queryHelper})
 	return b
 }
 
 func (b *QueryBuilder) Neq(column string, value interface{}) *QueryBuilder {
-	b.conditions.Append(&NEQCondition{column: column, rawValue: value})
+	b.conditions.Append(&NEQCondition{column: column, rawValue: value, queryHelper: b.queryHelper})
 	return b
 }
 
 func (b *QueryBuilder) Gt(column string, value interface{}) *QueryBuilder {
-	b.conditions.Append(&GTCondition{column: column, rawValue: value})
+	b.conditions.Append(&GTCondition{column: column, rawValue: value, queryHelper: b.queryHelper})
 	return b
 }
 
 func (b *QueryBuilder) Lt(column string, value interface{}) *QueryBuilder {
-	b.conditions.Append(&LTCondition{column: column, rawValue: value})
+	b.conditions.Append(&LTCondition{column: column, rawValue: value, queryHelper: b.queryHelper})
 	return b
 }
 
 func (b *QueryBuilder) Gte(column string, value interface{}) *QueryBuilder {
-	b.conditions.Append(&GTECondition{column: column, rawValue: value})
+	b.conditions.Append(&GTECondition{column: column, rawValue: value, queryHelper: b.queryHelper})
 	return b
 }
 
 func (b *QueryBuilder) Lte(column string, value interface{}) *QueryBuilder {
-	b.conditions.Append(&LTECondition{column: column, rawValue: value})
+	b.conditions.Append(&LTECondition{column: column, rawValue: value, queryHelper: b.queryHelper})
 	return b
 }
 
@@ -846,7 +862,7 @@ func (b *QueryBuilder) In(column string, values interface{}) *QueryBuilder {
 		b.err = ErrMultipleINQueries
 		return b
 	}
-	condition := &INCondition{column: column, rawValues: values}
+	condition := &INCondition{column: column, rawValues: values, queryHelper: b.queryHelper}
 	b.inCondition = condition
 	b.conditions.Append(condition)
 	return b
@@ -937,9 +953,10 @@ func (b *QueryBuilder) IsUnsupportedCacheQuery() bool {
 }
 
 type EQCondition struct {
-	column   string
-	rawValue interface{}
-	value    *Value
+	queryHelper *database.QueryHelper
+	column      string
+	rawValue    interface{}
+	value       *Value
 }
 
 func (c *EQCondition) Column() string {
@@ -964,9 +981,9 @@ func (c *EQCondition) Search(tree *BTree) []Leaf {
 
 func (c *EQCondition) Query() string {
 	if c.rawValue == nil {
-		return fmt.Sprintf("`%s` IS NULL", c.column)
+		return fmt.Sprintf("%s IS NULL", c.queryHelper.Quote(c.column))
 	}
-	return fmt.Sprintf("`%s` = ?", c.column)
+	return fmt.Sprintf("%s = %s", c.queryHelper.Quote(c.column), c.queryHelper.Placeholder())
 }
 
 func (c *EQCondition) QueryArgs() []interface{} {
@@ -992,9 +1009,10 @@ func (c *EQCondition) Release() {
 }
 
 type NEQCondition struct {
-	column   string
-	rawValue interface{}
-	value    *Value
+	queryHelper *database.QueryHelper
+	column      string
+	rawValue    interface{}
+	value       *Value
 }
 
 func (c *NEQCondition) Column() string {
@@ -1007,9 +1025,9 @@ func (c *NEQCondition) Value() *Value {
 
 func (c *NEQCondition) Query() string {
 	if c.rawValue == nil {
-		return fmt.Sprintf("`%s` IS NOT NULL", c.column)
+		return fmt.Sprintf("%s IS NOT NULL", c.queryHelper.Quote(c.column))
 	}
-	return fmt.Sprintf("`%s` != ?", c.column)
+	return fmt.Sprintf("%s != %s", c.queryHelper.Quote(c.column), c.queryHelper.Placeholder())
 }
 
 func (c *NEQCondition) QueryArgs() []interface{} {
@@ -1044,9 +1062,10 @@ func (c *NEQCondition) Release() {
 }
 
 type GTCondition struct {
-	column   string
-	rawValue interface{}
-	value    *Value
+	queryHelper *database.QueryHelper
+	column      string
+	rawValue    interface{}
+	value       *Value
 }
 
 func (c *GTCondition) Column() string {
@@ -1058,7 +1077,7 @@ func (c *GTCondition) Value() *Value {
 }
 
 func (c *GTCondition) Query() string {
-	return fmt.Sprintf("`%s` > ?", c.column)
+	return fmt.Sprintf("%s > %s", c.queryHelper.Quote(c.column), c.queryHelper.Placeholder())
 }
 
 func (c *GTCondition) QueryArgs() []interface{} {
@@ -1089,9 +1108,10 @@ func (c *GTCondition) Release() {
 }
 
 type GTECondition struct {
-	column   string
-	rawValue interface{}
-	value    *Value
+	queryHelper *database.QueryHelper
+	column      string
+	rawValue    interface{}
+	value       *Value
 }
 
 func (c *GTECondition) Column() string {
@@ -1103,7 +1123,7 @@ func (c *GTECondition) Value() *Value {
 }
 
 func (c *GTECondition) Query() string {
-	return fmt.Sprintf("`%s` >= ?", c.column)
+	return fmt.Sprintf("%s >= %s", c.queryHelper.Quote(c.column), c.queryHelper.Placeholder())
 }
 
 func (c *GTECondition) QueryArgs() []interface{} {
@@ -1134,9 +1154,10 @@ func (c *GTECondition) Release() {
 }
 
 type LTCondition struct {
-	column   string
-	rawValue interface{}
-	value    *Value
+	queryHelper *database.QueryHelper
+	column      string
+	rawValue    interface{}
+	value       *Value
 }
 
 func (c *LTCondition) Column() string {
@@ -1148,7 +1169,7 @@ func (c *LTCondition) Value() *Value {
 }
 
 func (c *LTCondition) Query() string {
-	return fmt.Sprintf("`%s` < ?", c.column)
+	return fmt.Sprintf("%s < %s", c.queryHelper.Quote(c.column), c.queryHelper.Placeholder())
 }
 
 func (c *LTCondition) QueryArgs() []interface{} {
@@ -1179,9 +1200,10 @@ func (c *LTCondition) Release() {
 }
 
 type LTECondition struct {
-	column   string
-	rawValue interface{}
-	value    *Value
+	queryHelper *database.QueryHelper
+	column      string
+	rawValue    interface{}
+	value       *Value
 }
 
 func (c *LTECondition) Column() string {
@@ -1193,7 +1215,7 @@ func (c *LTECondition) Value() *Value {
 }
 
 func (c *LTECondition) Query() string {
-	return fmt.Sprintf("`%s` <= ?", c.column)
+	return fmt.Sprintf("%s <= %s", c.queryHelper.Quote(c.column), c.queryHelper.Placeholder())
 }
 
 func (c *LTECondition) QueryArgs() []interface{} {
@@ -1224,9 +1246,10 @@ func (c *LTECondition) Release() {
 }
 
 type INCondition struct {
-	column    string
-	rawValues interface{}
-	values    []*Value
+	queryHelper *database.QueryHelper
+	column      string
+	rawValues   interface{}
+	values      []*Value
 }
 
 func (c *INCondition) Column() string {
@@ -1238,11 +1261,7 @@ func (c *INCondition) Value() *Value {
 }
 
 func (c *INCondition) Query() string {
-	placeholders := make([]string, len(c.values))
-	for i := 0; i < len(c.values); i++ {
-		placeholders[i] = "?"
-	}
-	return fmt.Sprintf("`%s` IN (%s)", c.column, strings.Join(placeholders, ","))
+	return fmt.Sprintf("%s IN (%s)", c.queryHelper.Quote(c.column), c.queryHelper.Placeholders(len(c.values)))
 }
 
 func (c *INCondition) QueryArgs() []interface{} {

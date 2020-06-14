@@ -10,10 +10,10 @@ import (
 func TestConfig(t *testing.T) {
 	cfg, err := NewConfig("testdata/cache.yml")
 	NoError(t, err)
-	cache, err := New(cfg.Options()...)
+	cache, err := New(append([]OptionFunc{DatabaseAdapter(driver.DBType)}, cfg.Options()...)...)
 	NoError(t, err)
 	NoError(t, cache.Flush())
-	conn, err := sql.Open("mysql", "root:@tcp(localhost:3306)/rapidash?parseTime=true")
+	conn, err := sql.Open(driver.Name, driver.Source)
 	NoError(t, err)
 	NoError(t, cache.WarmUp(conn, userLoginType(), false))
 	t.Run("create new records", func(t *testing.T) {
@@ -43,7 +43,7 @@ func TestConfig(t *testing.T) {
 		tx, err := cache.Begin(txConn)
 		NoError(t, err)
 		for i := 1001; i <= 1005; i++ {
-			builder := NewQueryBuilder("user_logins").
+			builder := NewQueryBuilder("user_logins", driver.Adapter).
 				Eq("user_id", uint64(i)).
 				Eq("user_session_id", uint64(i))
 			var foundUserLogin UserLogin
@@ -173,7 +173,7 @@ func TestConfig(t *testing.T) {
 
 					t.Run("should retrieve each handled data", func(t *testing.T) {
 						key := fmt.Sprintf("key_%d", time.Now().UnixNano())
-						var resultFirst  int
+						var resultFirst int
 						var resultSecond int
 						expectFirst := 1
 						expectSecond := 2
@@ -213,7 +213,7 @@ func TestConfig(t *testing.T) {
 				t.Run("implicit cache control", func(t *testing.T) {
 					t.Run("should retrieve each handled data", func(t *testing.T) {
 						key := fmt.Sprintf("key_%d", time.Now().UnixNano())
-						var resultFirst  int
+						var resultFirst int
 						var resultSecond int
 						expectFirst := 1
 						expectSecond := 2

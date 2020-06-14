@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	"go.knocknote.io/rapidash/database"
 	"golang.org/x/xerrors"
 )
 
@@ -89,17 +89,17 @@ func emptyType() *Struct {
 }
 
 func TestPK(t *testing.T) {
-	flc := NewFirstLevelCache(eventType())
+	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, flc.WarmUp(conn))
 	var event Event
 	NoError(t, flc.FindByPrimaryKey(NewUint64Value(uint64(1)), &event))
 }
 
 func TestINQuery(t *testing.T) {
-	flc := NewFirstLevelCache(eventType())
+	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, flc.WarmUp(conn))
 	t.Run("in query", func(t *testing.T) {
-		builder := NewQueryBuilder("events").In("id", []uint64{1, 2, 3, 4, 5})
+		builder := NewQueryBuilder("events", driver.Adapter).In("id", []uint64{1, 2, 3, 4, 5})
 		var events EventSlice
 		NoError(t, flc.FindByQueryBuilder(builder, &events))
 		if len(events) != 5 {
@@ -107,7 +107,7 @@ func TestINQuery(t *testing.T) {
 		}
 	})
 	t.Run("in query by duplicated values", func(t *testing.T) {
-		builder := NewQueryBuilder("events").In("id", []uint64{1, 2, 3, 4, 5, 1, 2, 3, 4, 5})
+		builder := NewQueryBuilder("events", driver.Adapter).In("id", []uint64{1, 2, 3, 4, 5, 1, 2, 3, 4, 5})
 		var events EventSlice
 		NoError(t, flc.FindByQueryBuilder(builder, &events))
 		if len(events) != 5 {
@@ -117,7 +117,7 @@ func TestINQuery(t *testing.T) {
 }
 
 func TestFindAll(t *testing.T) {
-	flc := NewFirstLevelCache(eventType())
+	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, flc.WarmUp(conn))
 	var events EventSlice
 	NoError(t, flc.FindAll(&events))
@@ -127,9 +127,9 @@ func TestFindAll(t *testing.T) {
 }
 
 func TestComplicatedQuery(t *testing.T) {
-	flc := NewFirstLevelCache(eventType())
+	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, flc.WarmUp(conn))
-	builder := NewQueryBuilder("events").
+	builder := NewQueryBuilder("events", driver.Adapter).
 		Eq("event_id", uint64(1)).
 		Gte("start_week", uint8(12)).
 		Lte("end_week", uint8(24)).
@@ -146,7 +146,7 @@ func TestNEQQuery(t *testing.T) {
 	NoError(t, err)
 	t.Run("index column", func(t *testing.T) {
 		{
-			builder := NewQueryBuilder("events").
+			builder := NewQueryBuilder("events", driver.Adapter).
 				Eq("term", "daytime").
 				Gte("start_week", uint8(1)).
 				Neq("end_week", uint8(12))
@@ -155,7 +155,7 @@ func TestNEQQuery(t *testing.T) {
 			Equal(t, len(events), 3000)
 		}
 		{
-			builder := NewQueryBuilder("events").Neq("id", uint64(1))
+			builder := NewQueryBuilder("events", driver.Adapter).Neq("id", uint64(1))
 			var events EventSlice
 			NoError(t, tx.FindByQueryBuilder(builder, &events))
 			Equal(t, len(events), 3999)
@@ -163,13 +163,13 @@ func TestNEQQuery(t *testing.T) {
 	})
 	t.Run("not index column", func(t *testing.T) {
 		{
-			builder := NewQueryBuilder("events").Neq("end_week", uint8(12))
+			builder := NewQueryBuilder("events", driver.Adapter).Neq("end_week", uint8(12))
 			var events EventSlice
 			NoError(t, tx.FindByQueryBuilder(builder, &events))
 			Equal(t, len(events), 3000)
 		}
 		{
-			builder := NewQueryBuilder("events").Lte("end_week", uint8(100)).Neq("end_week", uint8(12))
+			builder := NewQueryBuilder("events", driver.Adapter).Lte("end_week", uint8(100)).Neq("end_week", uint8(12))
 			var events EventSlice
 			NoError(t, tx.FindByQueryBuilder(builder, &events))
 			Equal(t, len(events), 3000)
@@ -179,10 +179,10 @@ func TestNEQQuery(t *testing.T) {
 }
 
 func TestGteAndLteQuery(t *testing.T) {
-	flc := NewFirstLevelCache(eventType())
+	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, flc.WarmUp(conn))
 	t.Run("primary key column", func(t *testing.T) {
-		builder := NewQueryBuilder("events").
+		builder := NewQueryBuilder("events", driver.Adapter).
 			Gte("id", uint64(1)).
 			Lte("id", uint64(5))
 		var events EventSlice
@@ -192,14 +192,14 @@ func TestGteAndLteQuery(t *testing.T) {
 
 	t.Run("index column", func(t *testing.T) {
 		{
-			builder := NewQueryBuilder("events").
+			builder := NewQueryBuilder("events", driver.Adapter).
 				Gte("event_id", uint64(900))
 			var events EventSlice
 			NoError(t, flc.FindByQueryBuilder(builder, &events))
 			Equal(t, len(events), 404)
 		}
 		{
-			builder := NewQueryBuilder("events").
+			builder := NewQueryBuilder("events", driver.Adapter).
 				Lte("event_id", uint64(1000)).
 				Gte("event_id", uint64(900)).
 				Eq("start_week", uint8(1))
@@ -208,7 +208,7 @@ func TestGteAndLteQuery(t *testing.T) {
 			Equal(t, len(events), 101)
 		}
 		{
-			builder := NewQueryBuilder("events").
+			builder := NewQueryBuilder("events", driver.Adapter).
 				Lte("event_id", uint64(1000)).
 				Gte("event_id", uint64(900)).
 				Eq("event_id", uint64(1))
@@ -217,7 +217,7 @@ func TestGteAndLteQuery(t *testing.T) {
 			Equal(t, len(events), 0)
 		}
 		{
-			builder := NewQueryBuilder("events").
+			builder := NewQueryBuilder("events", driver.Adapter).
 				In("term", []string{"morning", "daytime"}).
 				Gte("start_week", uint8(12)).
 				Lte("start_week", uint8(25))
@@ -229,7 +229,7 @@ func TestGteAndLteQuery(t *testing.T) {
 
 	t.Run("not index column", func(t *testing.T) {
 		{
-			builder := NewQueryBuilder("events").
+			builder := NewQueryBuilder("events", driver.Adapter).
 				Gte("start_week", uint8(12)).
 				Lte("start_week", uint8(25))
 			var events EventSlice
@@ -238,7 +238,7 @@ func TestGteAndLteQuery(t *testing.T) {
 		}
 		{
 			now := time.Now()
-			builder := NewQueryBuilder("events").
+			builder := NewQueryBuilder("events", driver.Adapter).
 				Lte("updated_at", now).
 				Gte("updated_at", now.Add(time.Hour*24*7))
 			var events EventSlice
@@ -249,10 +249,10 @@ func TestGteAndLteQuery(t *testing.T) {
 }
 
 func TestGtAndLtQuery(t *testing.T) {
-	flc := NewFirstLevelCache(eventType())
+	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, flc.WarmUp(conn))
 	t.Run("primary key column", func(t *testing.T) {
-		builder := NewQueryBuilder("events").
+		builder := NewQueryBuilder("events", driver.Adapter).
 			Gt("id", uint64(0)).
 			Lt("id", uint64(6))
 		var events EventSlice
@@ -262,14 +262,14 @@ func TestGtAndLtQuery(t *testing.T) {
 
 	t.Run("index column", func(t *testing.T) {
 		{
-			builder := NewQueryBuilder("events").
+			builder := NewQueryBuilder("events", driver.Adapter).
 				Gt("event_id", uint64(900))
 			var events EventSlice
 			NoError(t, flc.FindByQueryBuilder(builder, &events))
 			Equal(t, len(events), 400)
 		}
 		{
-			builder := NewQueryBuilder("events").
+			builder := NewQueryBuilder("events", driver.Adapter).
 				Gt("event_id", uint64(900)).
 				Lt("event_id", uint64(1000))
 			var events EventSlice
@@ -277,7 +277,7 @@ func TestGtAndLtQuery(t *testing.T) {
 			Equal(t, len(events), 396)
 		}
 		{
-			builder := NewQueryBuilder("events").
+			builder := NewQueryBuilder("events", driver.Adapter).
 				Lt("event_id", uint64(1000)).
 				Gt("event_id", uint64(900)).
 				Eq("start_week", uint8(1))
@@ -289,7 +289,7 @@ func TestGtAndLtQuery(t *testing.T) {
 
 	t.Run("not index column", func(t *testing.T) {
 		{
-			builder := NewQueryBuilder("events").
+			builder := NewQueryBuilder("events", driver.Adapter).
 				Gt("start_week", uint8(12)).
 				Lt("start_week", uint8(25))
 			var events EventSlice
@@ -298,7 +298,7 @@ func TestGtAndLtQuery(t *testing.T) {
 		}
 		{
 			now := time.Now()
-			builder := NewQueryBuilder("events").
+			builder := NewQueryBuilder("events", driver.Adapter).
 				Lt("updated_at", now).
 				Gt("updated_at", now.Add(time.Hour*24*7))
 			var events EventSlice
@@ -309,9 +309,9 @@ func TestGtAndLtQuery(t *testing.T) {
 }
 
 func TestOrderQuery(t *testing.T) {
-	flc := NewFirstLevelCache(eventType())
+	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, flc.WarmUp(conn))
-	builder := NewQueryBuilder("events").
+	builder := NewQueryBuilder("events", driver.Adapter).
 		Eq("event_id", uint64(1)).
 		Gte("start_week", uint8(12)).
 		OrderDesc("id").
@@ -331,9 +331,9 @@ func TestOrderQuery(t *testing.T) {
 }
 
 func TestCountQueryFLC(t *testing.T) {
-	flc := NewFirstLevelCache(eventType())
+	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, flc.WarmUp(conn))
-	builder := NewQueryBuilder("events").
+	builder := NewQueryBuilder("events", driver.Adapter).
 		Eq("event_id", uint64(1))
 	count, err := flc.CountByQueryBuilder(builder)
 	NoError(t, err)
@@ -352,7 +352,7 @@ func TestPtrType(t *testing.T) {
 	tx, err := cache.Begin()
 	NoError(t, err)
 	t.Run("EQ", func(t *testing.T) {
-		builder := NewQueryBuilder("ptr").Eq("intptr", 1).Eq("int8ptr", int8(2)).
+		builder := NewQueryBuilder("ptr", driver.Adapter).Eq("intptr", 1).Eq("int8ptr", int8(2)).
 			Eq("int16ptr", int16(3)).Eq("int32ptr", int32(4)).Eq("int64ptr", int64(5)).
 			Eq("uintptr", uint(6)).Eq("uint8ptr", uint8(7)).Eq("uint16ptr", uint16(8)).
 			Eq("uint32ptr", uint32(9)).Eq("uint64ptr", uint64(10)).Eq("float32ptr", float32(1.23)).
@@ -372,7 +372,7 @@ func TestPtrType(t *testing.T) {
 
 	})
 	t.Run("NEQ", func(t *testing.T) {
-		builder := NewQueryBuilder("ptr").Neq("intptr", 1).Neq("int8ptr", int8(2)).
+		builder := NewQueryBuilder("ptr", driver.Adapter).Neq("intptr", 1).Neq("int8ptr", int8(2)).
 			Neq("int16ptr", int16(3)).Neq("int32ptr", int32(4)).Neq("int64ptr", int64(5)).
 			Neq("uintptr", uint(6)).Neq("uint8ptr", uint8(7)).Neq("uint16ptr", uint16(8)).
 			Neq("uint32ptr", uint32(9)).Neq("uint64ptr", uint64(10)).Neq("float32ptr", float32(1.23)).
@@ -384,23 +384,23 @@ func TestPtrType(t *testing.T) {
 	})
 	t.Run("LTE AND GTE", func(t *testing.T) {
 		builders := []*QueryBuilder{
-			NewQueryBuilder("ptr").Gte("intptr", 1).Lte("intptr", 1),
-			NewQueryBuilder("ptr").Gte("int8ptr", int8(2)).Lte("int8ptr", int8(2)),
-			NewQueryBuilder("ptr").Gte("int16ptr", int16(3)).Lte("int16ptr", int16(3)),
-			NewQueryBuilder("ptr").Gte("int32ptr", int32(4)).Lte("int32ptr", int32(4)),
-			NewQueryBuilder("ptr").Gte("int64ptr", int64(5)).Lte("int64ptr", int64(5)),
-			NewQueryBuilder("ptr").Gte("uintptr", uint(6)).Lte("uintptr", uint(6)),
-			NewQueryBuilder("ptr").Gte("uint8ptr", uint8(7)).Lte("uint8ptr", uint8(7)),
-			NewQueryBuilder("ptr").Gte("uint16ptr", uint16(8)).Lte("uint16ptr", uint16(8)),
-			NewQueryBuilder("ptr").Gte("uint32ptr", uint32(9)).Lte("uint32ptr", uint32(9)),
-			NewQueryBuilder("ptr").Gte("uint64ptr", uint64(10)).Lte("uint64ptr", uint64(10)),
-			NewQueryBuilder("ptr").Gte("float32ptr", float32(1.23)).Lte("float32ptr", float32(1.23)),
-			NewQueryBuilder("ptr").Gte("float64ptr", float64(4.56)).Lte("float64ptr", float64(4.56)),
-			NewQueryBuilder("ptr").Gte("bytesptr", []byte("bytes")).Lte("bytesptr", []byte("bytes")),
-			NewQueryBuilder("ptr").Gte("stringptr", "string").Lte("stringptr", "string"),
-			NewQueryBuilder("ptr").Gte("boolptr", false),
-			NewQueryBuilder("ptr").Lte("boolptr", true),
-			NewQueryBuilder("ptr").Gte("timeptr", time.Now().Add(-time.Hour*24)).Lte("timeptr", time.Now().Add(time.Hour*24)),
+			NewQueryBuilder("ptr", driver.Adapter).Gte("intptr", 1).Lte("intptr", 1),
+			NewQueryBuilder("ptr", driver.Adapter).Gte("int8ptr", int8(2)).Lte("int8ptr", int8(2)),
+			NewQueryBuilder("ptr", driver.Adapter).Gte("int16ptr", int16(3)).Lte("int16ptr", int16(3)),
+			NewQueryBuilder("ptr", driver.Adapter).Gte("int32ptr", int32(4)).Lte("int32ptr", int32(4)),
+			NewQueryBuilder("ptr", driver.Adapter).Gte("int64ptr", int64(5)).Lte("int64ptr", int64(5)),
+			NewQueryBuilder("ptr", driver.Adapter).Gte("uintptr", uint(6)).Lte("uintptr", uint(6)),
+			NewQueryBuilder("ptr", driver.Adapter).Gte("uint8ptr", uint8(7)).Lte("uint8ptr", uint8(7)),
+			NewQueryBuilder("ptr", driver.Adapter).Gte("uint16ptr", uint16(8)).Lte("uint16ptr", uint16(8)),
+			NewQueryBuilder("ptr", driver.Adapter).Gte("uint32ptr", uint32(9)).Lte("uint32ptr", uint32(9)),
+			NewQueryBuilder("ptr", driver.Adapter).Gte("uint64ptr", uint64(10)).Lte("uint64ptr", uint64(10)),
+			NewQueryBuilder("ptr", driver.Adapter).Gte("float32ptr", float32(1.23)).Lte("float32ptr", float32(1.23)),
+			NewQueryBuilder("ptr", driver.Adapter).Gte("float64ptr", float64(4.56)).Lte("float64ptr", float64(4.56)),
+			NewQueryBuilder("ptr", driver.Adapter).Gte("bytesptr", []byte("bytes")).Lte("bytesptr", []byte("bytes")),
+			NewQueryBuilder("ptr", driver.Adapter).Gte("stringptr", "string").Lte("stringptr", "string"),
+			NewQueryBuilder("ptr", driver.Adapter).Gte("boolptr", false),
+			NewQueryBuilder("ptr", driver.Adapter).Lte("boolptr", true),
+			NewQueryBuilder("ptr", driver.Adapter).Gte("timeptr", time.Now().Add(-time.Hour*24)).Lte("timeptr", time.Now().Add(time.Hour*24)),
 		}
 
 		for _, builder := range builders {
@@ -416,23 +416,23 @@ func TestPtrType(t *testing.T) {
 	})
 	t.Run("LT AND GT", func(t *testing.T) {
 		builders := []*QueryBuilder{
-			NewQueryBuilder("ptr").Gt("intptr", 0).Lt("intptr", 2),
-			NewQueryBuilder("ptr").Gt("int8ptr", int8(1)).Lt("int8ptr", int8(3)),
-			NewQueryBuilder("ptr").Gt("int16ptr", int16(2)).Lt("int16ptr", int16(4)),
-			NewQueryBuilder("ptr").Gt("int32ptr", int32(3)).Lt("int32ptr", int32(5)),
-			NewQueryBuilder("ptr").Gt("int64ptr", int64(4)).Lt("int64ptr", int64(6)),
-			NewQueryBuilder("ptr").Gt("uintptr", uint(5)).Lt("uintptr", uint(7)),
-			NewQueryBuilder("ptr").Gt("uint8ptr", uint8(6)).Lt("uint8ptr", uint8(8)),
-			NewQueryBuilder("ptr").Gt("uint16ptr", uint16(7)).Lt("uint16ptr", uint16(9)),
-			NewQueryBuilder("ptr").Gt("uint32ptr", uint32(8)).Lt("uint32ptr", uint32(10)),
-			NewQueryBuilder("ptr").Gt("uint64ptr", uint64(9)).Lt("uint64ptr", uint64(11)),
-			NewQueryBuilder("ptr").Gt("float32ptr", float32(1.22)).Lt("float32ptr", float32(1.24)),
-			NewQueryBuilder("ptr").Gt("float64ptr", float64(4.55)).Lt("float64ptr", float64(4.57)),
-			NewQueryBuilder("ptr").Gt("bytesptr", []byte("byte")).Lt("bytesptr", []byte("bytess")),
-			NewQueryBuilder("ptr").Gt("stringptr", "strin").Lt("stringptr", "strings"),
-			NewQueryBuilder("ptr").Gt("boolptr", false),
-			NewQueryBuilder("ptr").Lt("boolptr", true),
-			NewQueryBuilder("ptr").Gt("timeptr", time.Now().Add(-time.Hour*24)).Lt("timeptr", time.Now().Add(time.Hour*24)),
+			NewQueryBuilder("ptr", driver.Adapter).Gt("intptr", 0).Lt("intptr", 2),
+			NewQueryBuilder("ptr", driver.Adapter).Gt("int8ptr", int8(1)).Lt("int8ptr", int8(3)),
+			NewQueryBuilder("ptr", driver.Adapter).Gt("int16ptr", int16(2)).Lt("int16ptr", int16(4)),
+			NewQueryBuilder("ptr", driver.Adapter).Gt("int32ptr", int32(3)).Lt("int32ptr", int32(5)),
+			NewQueryBuilder("ptr", driver.Adapter).Gt("int64ptr", int64(4)).Lt("int64ptr", int64(6)),
+			NewQueryBuilder("ptr", driver.Adapter).Gt("uintptr", uint(5)).Lt("uintptr", uint(7)),
+			NewQueryBuilder("ptr", driver.Adapter).Gt("uint8ptr", uint8(6)).Lt("uint8ptr", uint8(8)),
+			NewQueryBuilder("ptr", driver.Adapter).Gt("uint16ptr", uint16(7)).Lt("uint16ptr", uint16(9)),
+			NewQueryBuilder("ptr", driver.Adapter).Gt("uint32ptr", uint32(8)).Lt("uint32ptr", uint32(10)),
+			NewQueryBuilder("ptr", driver.Adapter).Gt("uint64ptr", uint64(9)).Lt("uint64ptr", uint64(11)),
+			NewQueryBuilder("ptr", driver.Adapter).Gt("float32ptr", float32(1.22)).Lt("float32ptr", float32(1.24)),
+			NewQueryBuilder("ptr", driver.Adapter).Gt("float64ptr", float64(4.55)).Lt("float64ptr", float64(4.57)),
+			NewQueryBuilder("ptr", driver.Adapter).Gt("bytesptr", []byte("byte")).Lt("bytesptr", []byte("bytess")),
+			NewQueryBuilder("ptr", driver.Adapter).Gt("stringptr", "strin").Lt("stringptr", "strings"),
+			NewQueryBuilder("ptr", driver.Adapter).Gt("boolptr", false),
+			NewQueryBuilder("ptr", driver.Adapter).Lt("boolptr", true),
+			NewQueryBuilder("ptr", driver.Adapter).Gt("timeptr", time.Now().Add(-time.Hour*24)).Lt("timeptr", time.Now().Add(time.Hour*24)),
 		}
 
 		for _, builder := range builders {
@@ -450,7 +450,7 @@ func TestPtrType(t *testing.T) {
 }
 
 func TestFindByPrimaryKeyCaseDatabaseRecordIsEmpty(t *testing.T) {
-	flc := NewFirstLevelCache(emptyType())
+	flc := NewFirstLevelCache(emptyType(), database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, flc.WarmUp(conn))
 	var empty Empty
 	NoError(t, flc.FindByPrimaryKey(NewUint64Value(uint64(1)), &empty))
@@ -460,9 +460,9 @@ func TestFindByPrimaryKeyCaseDatabaseRecordIsEmpty(t *testing.T) {
 }
 
 func TestFindByQueryBuilderCaseDatabaseRecordIsEmpty(t *testing.T) {
-	flc := NewFirstLevelCache(emptyType())
+	flc := NewFirstLevelCache(emptyType(), database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, flc.WarmUp(conn))
-	builder := NewQueryBuilder("empties").In("id", []uint64{1})
+	builder := NewQueryBuilder("empties", driver.Adapter).In("id", []uint64{1})
 	var empties EmptySlice
 	NoError(t, flc.FindByQueryBuilder(builder, &empties))
 	if len(empties) != 0 {
@@ -471,9 +471,9 @@ func TestFindByQueryBuilderCaseDatabaseRecordIsEmpty(t *testing.T) {
 }
 
 func TestCountByQueryBuilderCaseDatabaseRecordIsEmptyFLC(t *testing.T) {
-	flc := NewFirstLevelCache(emptyType())
+	flc := NewFirstLevelCache(emptyType(), database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, flc.WarmUp(conn))
-	builder := NewQueryBuilder("empties").Eq("id", uint64(1))
+	builder := NewQueryBuilder("empties", driver.Adapter).Eq("id", uint64(1))
 	count, err := flc.CountByQueryBuilder(builder)
 	NoError(t, err)
 	if count != 0 {
@@ -482,7 +482,7 @@ func TestCountByQueryBuilderCaseDatabaseRecordIsEmptyFLC(t *testing.T) {
 }
 
 func TestFindAllCaseDatabaseRecordIsEmpty(t *testing.T) {
-	flc := NewFirstLevelCache(emptyType())
+	flc := NewFirstLevelCache(emptyType(), database.NewAdapterWithDBType(driver.DBType))
 	NoError(t, flc.WarmUp(conn))
 	var empties EmptySlice
 	NoError(t, flc.FindAll(&empties))
@@ -527,7 +527,7 @@ func BenchmarkPK_MySQL(b *testing.B) {
 }
 
 func BenchmarkPK_Rapidash(b *testing.B) {
-	flc := NewFirstLevelCache(eventType())
+	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(driver.DBType))
 	if err := flc.WarmUp(conn); err != nil {
 		panic(err)
 	}
@@ -591,11 +591,11 @@ func BenchmarkIN_MySQL(b *testing.B) {
 }
 
 func BenchmarkIN_Rapidash(b *testing.B) {
-	flc := NewFirstLevelCache(eventType())
+	flc := NewFirstLevelCache(eventType(), database.NewAdapterWithDBType(driver.DBType))
 	if err := flc.WarmUp(conn); err != nil {
 		panic(err)
 	}
-	builder := NewQueryBuilder("events").In("id", []uint64{1, 2, 3, 4, 5})
+	builder := NewQueryBuilder("events", driver.Adapter).In("id", []uint64{1, 2, 3, 4, 5})
 	b.ResetTimer()
 	events := []*Event{}
 	for n := 0; n < b.N; n++ {
