@@ -1,4 +1,4 @@
-# Rapidash [![README_EN](https://img.shields.io/badge/readme-EN-green.svg)](https://github.com/knocknote/rapidash/blob/master/README.md)
+# Rapidash [![README_EN](https://img.shields.io/badge/readme-EN-green.svg)](https://github.com/blastrain/rapidash/blob/master/README.md)
 
 <img width="300" alt="2" src="https://user-images.githubusercontent.com/209884/34214640-697191ce-e5e6-11e7-8a12-c1cd45af2320.png">
 
