@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/knocknote/vitess-sqlparser/sqlparser"
+	"github.com/blastrain/vitess-sqlparser/sqlparser"
 	"go.knocknote.io/rapidash/server"
 	"golang.org/x/xerrors"
 )

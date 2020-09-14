@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/knocknote/vitess-sqlparser/sqlparser"
+	"github.com/blastrain/vitess-sqlparser/sqlparser"
 	"golang.org/x/xerrors"
 )
 
