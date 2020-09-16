@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/knocknote/vitess-sqlparser/sqlparser"
-	"github.com/knocknote/msgpack"
+	"github.com/blastrain/msgpack"
+	"github.com/blastrain/vitess-sqlparser/sqlparser"
 	"go.knocknote.io/rapidash/server"
 	"golang.org/x/xerrors"
 )
@@ -176,7 +176,7 @@ func (c *SecondLevelCache) setupPrimaryKey(constraint *sqlparser.Constraint) {
 	}
 	primaryKey := strings.Join(columns, ":")
 	for idx := range columns {
-		subColumns := columns[:idx+1:idx+1]
+		subColumns := columns[: idx+1 : idx+1]
 		if len(subColumns) == 0 {
 			continue
 		}

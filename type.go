@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/knocknote/msgpack"
+	"github.com/blastrain/msgpack"
 	"golang.org/x/xerrors"
 )
 
