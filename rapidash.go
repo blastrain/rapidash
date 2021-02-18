@@ -528,6 +528,33 @@ func (tx *Tx) DeleteByQueryBuilderContext(ctx context.Context, builder *QueryBui
 	return xerrors.Errorf("unknown table name %s", builder.tableName)
 }
 
+func (tx *Tx) DeleteCacheByQueryBuilder(builder *QueryBuilder) error {
+	if err := tx.DeleteCacheByQueryBuilderContext(context.Background(), builder); err != nil {
+		return xerrors.Errorf("failed to DeleteCacheByQueryBuilderContext: %w", err)
+	}
+	return nil
+}
+
+func (tx *Tx) DeleteCacheByQueryBuilderContext(ctx context.Context, builder *QueryBuilder) error {
+	if tx.IsCommitted() {
+		return ErrAlreadyCommittedTransaction
+	}
+	tx.enabledIgnoreCacheIfExistsTable(builder)
+	if _, exists := tx.r.firstLevelCaches.get(builder.tableName); exists {
+		return xerrors.Errorf("%s is read only table. it doesn't support write query", builder.tableName)
+	}
+	if c, exists := tx.r.secondLevelCaches.get(builder.tableName); exists {
+		if tx.conn == nil {
+			return ErrConnectionOfTransaction
+		}
+		if err := c.DeleteCacheByQueryBuilder(ctx, tx, builder); err != nil {
+			return xerrors.Errorf("failed to DeleteCacheByQueryBuilder: %w", err)
+		}
+		return nil
+	}
+	return xerrors.Errorf("unknown table name %s", builder.tableName)
+}
+
 func (tx *Tx) IsCommitted() bool {
 	return tx.isDBCommitted || tx.isCacheCommitted
 }
