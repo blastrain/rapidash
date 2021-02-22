@@ -1363,6 +1363,43 @@ func (c *SecondLevelCache) DeleteByQueryBuilder(ctx context.Context, tx *Tx, bui
 	return nil
 }
 
+func (c *SecondLevelCache) DeleteCacheOnlyByQueryBuilder(ctx context.Context, tx *Tx, builder *QueryBuilder) error {
+    defer builder.Release()
+    
+    if !builder.AvailableCache() {
+        if !builder.isIgnoreCache {
+            if err := c.deleteCacheFromSQL(ctx, tx, builder); err != nil {
+                return xerrors.Errorf("failed to delete cache by SQL: %w", err)
+            }
+        }
+        // log.DeleteOnlyCacheが必要？
+        
+        return nil
+    }
+
+    // Cacheにしか存在しない状態だとそもそもエラーになりそうだが、一旦試す
+    queries, err := builder.BuildWithIndex(c.valueFactory, c.indexes, c.typ)
+    if err != nil {
+        return xerrors.Errorf("failed to build query: %w", err)
+    }
+    
+    // PrimaryKeyリストに保持されてる場合は消しておく
+    if !c.isUsedPrimaryKeyBuilder(queries) {
+        if err := c.deleteCacheFromSQL(ctx, tx, builder); err != nil {
+            return xerrors.Errorf("failed to delete cache by SQL: %w", err)
+        }
+    } else {
+        for i := 0; i < queries.Len(); i++ {
+            cacheKey := queries.At(i).cacheKey
+            if err := c.deletePrimaryKey(tx, cacheKey); err != nil {
+                return xerrors.Errorf("failed to delete primary key: %w", err)
+            }
+        }
+    }
+    
+    return nil;
+}
+
 func (c *SecondLevelCache) builderByValue(value *StructValue, index *Index) *QueryBuilder {
 	builder := NewQueryBuilder(c.typ.tableName)
 	for _, column := range index.Columns {

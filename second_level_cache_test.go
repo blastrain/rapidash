@@ -1348,6 +1348,70 @@ func testDeleteByQueryBuilder(t *testing.T, typ CacheServerType) {
 
 }
 
+func TestDeleteCacheOnlyByQueryBuilder(t *testing.T) {
+    for cacheServerType := range []CacheServerType{CacheServerTypeMemcached, CacheServerTypeRedis} {
+        testDeleteCacheOnlyByQueryBuilder(t, CacheServerType(cacheServerType))
+    }
+}
+
+func testDeleteCacheOnlyByQueryBuilder(t *testing.T, typ CacheServerType) {
+    NoError(t, initCache(conn, typ))
+    slc := NewSecondLevelCache(userLoginType(), cache.cacheServer, TableOption{})
+    NoError(t, slc.WarmUp(conn))
+    t.Run("cache is available", func(t *testing.T) {
+        NoError(t, initUserLoginTable(conn))
+        builder := NewQueryBuilder("user_logins").
+            In("user_id", []uint64{1, 2, 3, 4, 5}).
+            Eq("user_session_id", uint64(1))
+        txConn, err := conn.Begin()
+        NoError(t, err)
+        tx, err := cache.Begin(txConn)
+        NoError(t, err)
+        NoError(t, slc.DeleteByQueryBuilder(context.Background(), tx, builder))
+        NoError(t, tx.Commit())
+    })
+
+    t.Run("not available cache", func(t *testing.T) {
+        NoError(t, initUserLoginTable(conn))
+        builder := NewQueryBuilder("user_logins").
+            Gte("user_session_id", uint64(1)).
+            Lte("user_session_id", uint64(3))
+        txConn, err := conn.Begin()
+        NoError(t, err)
+        tx, err := cache.Begin(txConn)
+        NoError(t, err)
+        NoError(t, slc.DeleteByQueryBuilder(context.Background(), tx, builder))
+
+        var userLogins UserLogins
+        findBuilder := NewQueryBuilder("user_logins").
+            Eq("user_id", uint64(1)).
+            In("user_session_id", []uint64{1, 2, 3})
+        NoError(t, slc.FindByQueryBuilder(context.Background(), tx, findBuilder, &userLogins))
+        if len(userLogins) != 0 {
+            t.Fatal("fail to delete")
+        }
+        NoError(t, tx.Commit())
+    })
+
+    t.Run("delete by primary keys", func(t *testing.T) {
+        NoError(t, initUserLoginTable(conn))
+        builder := NewQueryBuilder("user_logins").
+            In("id", []uint64{1, 2, 3, 4, 5})
+        txConn, err := conn.Begin()
+        NoError(t, err)
+        tx, err := cache.Begin(txConn)
+        NoError(t, err)
+        NoError(t, slc.DeleteCacheOnlyByQueryBuilder(context.Background(), tx, builder))
+
+        var userLogins UserLogins
+        NoError(t, slc.FindByQueryBuilder(context.Background(), tx, builder, &userLogins))
+        if len(userLogins) != 0 {
+            t.Fatal("fail to delete")
+        }
+        NoError(t, tx.Commit())
+    })
+}
+
 func TestRawQuery(t *testing.T) {
 	for cacheServerType := range []CacheServerType{CacheServerTypeMemcached, CacheServerTypeRedis} {
 		testRawQuery(t, CacheServerType(cacheServerType))

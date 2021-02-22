@@ -528,6 +528,28 @@ func (tx *Tx) DeleteByQueryBuilderContext(ctx context.Context, builder *QueryBui
 	return xerrors.Errorf("unknown table name %s", builder.tableName)
 }
 
+func (tx *Tx) DeleteForceCacheOnly(ctx context.Context, builder *QueryBuilder) error {
+    if tx.IsCommitted() {
+        return ErrAlreadyCommittedTransaction
+    }
+    // 無視キャッシュに設定（？
+    tx.enabledIgnoreCacheIfExistsTable(builder)
+    // firstLevelCacheなら消せない
+    if _, exists := tx.r.firstLevelCaches.get(builder.tableName); exists {
+        return xerrors.Errorf("%s is read only table. it doesn't support write query", builder.tableName)
+    }
+    if c, exists := tx.r.secondLevelCaches.get(builder.tableName); exists {
+        if tx.conn == nil {
+            return ErrConnectionOfTransaction
+        }
+        if err := c.DeleteCacheOnlyByQueryBuilder(ctx, tx, builder); err != nil {
+            return xerrors.Errorf("failed to DeleteByQueryBuilder: %w", err)
+        }
+        return nil
+    }
+    return xerrors.Errorf("unknown table name %s", builder.tableName)
+}
+
 func (tx *Tx) IsCommitted() bool {
 	return tx.isDBCommitted || tx.isCacheCommitted
 }
