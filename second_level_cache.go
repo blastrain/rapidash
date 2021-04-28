@@ -968,7 +968,7 @@ func (c *SecondLevelCache) UpdateByQueryBuilder(ctx context.Context, tx *Tx, bui
 		}
 		foundValues = values
 	} else {
-		sql, args := builder.SelectSQL(c.typ)
+		sql, args := builder.SelectSQL(c.valueFactory, c.typ)
 		rows, err := tx.conn.QueryContext(ctx, sql, args...)
 		if err != nil {
 			return xerrors.Errorf("failed sql %s %v: %w", sql, args, err)
@@ -989,7 +989,7 @@ func (c *SecondLevelCache) UpdateByQueryBuilder(ctx context.Context, tx *Tx, bui
 			log.GetFromDB(tx.id, sql, "", value)
 		}
 	}
-	sql, values := builder.UpdateSQL(updateMap)
+	sql, values := builder.UpdateSQL(c.valueFactory, updateMap)
 	if _, err := tx.conn.ExecContext(ctx, sql, values...); err != nil {
 		return xerrors.Errorf("failed update sql %s %v: %w", sql, values, err)
 	}
@@ -1297,7 +1297,8 @@ func (c *SecondLevelCache) isUsedPrimaryKeyBuilder(queries *Queries) bool {
 }
 
 func (c *SecondLevelCache) deleteCacheFromSQL(ctx context.Context, tx *Tx, builder *QueryBuilder) (e error) {
-	sql, args := builder.SelectSQL(c.typ)
+	sql, args := builder.SelectSQL(c.valueFactory, c.typ)
+
 	rows, err := tx.conn.QueryContext(ctx, sql, args...)
 	if err != nil {
 		return xerrors.Errorf("failed sql %s %v: %w", sql, args, err)
@@ -1332,7 +1333,7 @@ func (c *SecondLevelCache) DeleteByQueryBuilder(ctx context.Context, tx *Tx, bui
 				return xerrors.Errorf("failed to delete cache by SQL: %w", err)
 			}
 		}
-		sql, args := builder.DeleteSQL()
+		sql, args := builder.DeleteSQL(c.valueFactory)
 		if _, err := tx.conn.ExecContext(ctx, sql, args...); err != nil {
 			return xerrors.Errorf("failed sql %s %v: %w", sql, args, err)
 		}
@@ -1355,7 +1356,7 @@ func (c *SecondLevelCache) DeleteByQueryBuilder(ctx context.Context, tx *Tx, bui
 			}
 		}
 	}
-	sql, args := builder.DeleteSQL()
+	sql, args := builder.DeleteSQL(c.valueFactory)
 	if _, err := tx.conn.ExecContext(ctx, sql, args...); err != nil {
 		return xerrors.Errorf("failed sql %s %v: %w", sql, args, err)
 	}
@@ -1409,7 +1410,7 @@ func (c *SecondLevelCache) deleteKeyByValue(tx *Tx, value *StructValue) error {
 }
 
 func (c *SecondLevelCache) findValuesByQueryBuilderWithoutCache(ctx context.Context, tx *Tx, builder *QueryBuilder) (ssv *StructSliceValue, e error) {
-	sql, args := builder.SelectSQL(c.typ)
+	sql, args := builder.SelectSQL(c.valueFactory, c.typ)
 	rows, err := tx.conn.QueryContext(ctx, sql, args...)
 	if err != nil {
 		return nil, xerrors.Errorf("failed sql %s %v: %w", sql, args, err)

@@ -477,7 +477,7 @@ func TestTx_FindByQueryBuilderContext(t *testing.T) {
 		tx, err := cache.Begin(conn)
 		NoError(t, err)
 		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
-		builder := NewQueryBuilder("user_logs").Eq("id", uint64(1)).Gte("content_id", uint64(1)).Lte("content_id", uint64(1))
+		builder := NewQueryBuilder("user_logs").In("id", []uint64{1}).Gte("content_id", uint64(1)).Lte("content_id", uint64(1))
 		var userLogs UserLogs
 		NoError(t, tx.FindByQueryBuilderContext(context.Background(), builder, &userLogs))
 		NoError(t, tx.Commit())
