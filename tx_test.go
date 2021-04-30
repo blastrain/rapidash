@@ -767,3 +767,102 @@ func TestTx_DeleteByQueryBuilderContext(t *testing.T) {
 		}
 	})
 }
+
+func TestTx_DeleteCacheByQueryBuilder(t *testing.T) {
+	txConn, err := conn.Begin()
+	NoError(t, err)
+	tx, err := cache.Begin(txConn)
+	NoError(t, err)
+	defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
+
+	findBuilder := NewQueryBuilder("user_logins").
+		Eq("user_id", uint64(1)).
+		Eq("user_session_id", uint64(1))
+	var userLogin UserLogin
+	NoError(t, tx.FindByQueryBuilder(findBuilder, &userLogin))
+	NotEqualf(t, userLogin.ID, 0, "cannot find userLogin")
+
+	builder := NewQueryBuilder("user_logins").Eq("id", userLogin.ID)
+	NoError(t, tx.DeleteCacheByQueryBuilder(builder))
+	NoError(t, tx.Commit())
+}
+
+func TestTx_DeleteCacheByQueryBuilderContext(t *testing.T) {
+	t.Run("already committed", func(t *testing.T) {
+		txConn, err := conn.Begin()
+		NoError(t, err)
+		tx, err := cache.Begin(txConn)
+		NoError(t, err)
+		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
+		NoError(t, tx.Commit())
+
+		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		if err := tx.DeleteByQueryBuilderContext(context.Background(), builder); err != nil {
+			if !xerrors.Is(err, ErrAlreadyCommittedTransaction) {
+				t.Fatalf("unexpected type err: %+v", err)
+			}
+		} else {
+			t.Fatal("required not nil error")
+		}
+	})
+	t.Run("update flc table", func(t *testing.T) {
+		txConn, err := conn.Begin()
+		NoError(t, err)
+		tx, err := cache.Begin(txConn)
+		NoError(t, err)
+		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
+
+		builder := NewQueryBuilder("events").Eq("id", uint64(1))
+		var event Event
+		NoError(t, tx.FindByQueryBuilder(builder, &event))
+		NotEqualf(t, event.ID, 0, "cannot find event")
+
+		if err := tx.DeleteCacheByQueryBuilderContext(context.Background(), builder); err == nil {
+			t.Fatalf("err is nil")
+		}
+	})
+	t.Run("conn is nil", func(t *testing.T) {
+		tx, err := cache.Begin(nil)
+		NoError(t, err)
+		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
+
+		builder := NewQueryBuilder("user_logins").Eq("id", uint64(1))
+		if err := tx.DeleteCacheByQueryBuilderContext(context.Background(), builder); err != nil {
+			if !xerrors.Is(err, ErrConnectionOfTransaction) {
+				t.Fatalf("unexpected type err: %+v", err)
+			}
+		} else {
+			t.Fatal("required not nil error")
+		}
+	})
+	t.Run("update slc table", func(t *testing.T) {
+		txConn, err := conn.Begin()
+		NoError(t, err)
+		tx, err := cache.Begin(txConn)
+		NoError(t, err)
+		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
+
+		findBuilder := NewQueryBuilder("user_logins").
+			Eq("user_id", uint64(1)).
+			Eq("user_session_id", uint64(1))
+		var userLogin UserLogin
+		NoError(t, tx.FindByQueryBuilder(findBuilder, &userLogin))
+		NotEqualf(t, userLogin.ID, 0, "cannot find userLogin")
+
+		builder := NewQueryBuilder("user_logins").Eq("id", userLogin.ID)
+		NoError(t, tx.DeleteCacheByQueryBuilderContext(context.Background(), builder))
+		NoError(t, tx.Commit())
+	})
+	t.Run("update unknown table", func(t *testing.T) {
+		txConn, err := conn.Begin()
+		NoError(t, err)
+		tx, err := cache.Begin(txConn)
+		NoError(t, err)
+		defer func() { NoError(t, tx.RollbackUnlessCommitted()) }()
+
+		builder := NewQueryBuilder("rapidash").Eq("id", uint64(1))
+		if err := tx.DeleteCacheByQueryBuilderContext(context.Background(), builder); err == nil {
+			t.Fatalf("err is nil")
+		}
+	})
+}
